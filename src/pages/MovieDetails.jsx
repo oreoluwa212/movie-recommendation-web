@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { movieApi } from "../utils/api";
 import MovieCard from "../components/MovieCard";
+import MovieSection from "../components/MovieSection";
 
 const MovieDetails = () => {
   const { id } = useParams();
@@ -24,6 +25,8 @@ const MovieDetails = () => {
   const [error, setError] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
   const [similarMovies, setSimilarMovies] = useState([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [similarMoviesLoading, setSimilarMoviesLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
@@ -39,21 +42,7 @@ const MovieDetails = () => {
         setMovie(movieData);
 
         // Fetch recommendations and similar movies
-        try {
-          const [recResponse, similarResponse] = await Promise.all([
-            movieApi.getMovieRecommendations(id),
-            movieApi.getSimilarMovies(id),
-          ]);
-          setRecommendations(
-            recResponse.data?.results || recResponse.results || []
-          );
-          setSimilarMovies(
-            similarResponse.data?.results || similarResponse.results || []
-          );
-        } catch (err) {
-          console.log("Error fetching recommendations/similar movies:", err);
-          // Don't set error state for these non-critical requests
-        }
+        await Promise.all([fetchRecommendations(id), fetchSimilarMovies(id)]);
       } catch (err) {
         setError(err.message || "Failed to load movie details");
       } finally {
@@ -65,6 +54,34 @@ const MovieDetails = () => {
       fetchMovieData();
     }
   }, [id]);
+
+  const fetchRecommendations = async (movieId) => {
+    try {
+      setRecommendationsLoading(true);
+      const response = await movieApi.getMovieRecommendations(movieId);
+      const data = response.data || response;
+      setRecommendations(data.results || []);
+    } catch (err) {
+      console.log("Error fetching recommendations:", err);
+      setRecommendations([]);
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  };
+
+  const fetchSimilarMovies = async (movieId) => {
+    try {
+      setSimilarMoviesLoading(true);
+      const response = await movieApi.getSimilarMovies(movieId);
+      const data = response.data || response;
+      setSimilarMovies(data.results || []);
+    } catch (err) {
+      console.log("Error fetching similar movies:", err);
+      setSimilarMovies([]);
+    } finally {
+      setSimilarMoviesLoading(false);
+    }
+  };
 
   const handleAddToFavorites = async () => {
     try {
@@ -101,6 +118,14 @@ const MovieDetails = () => {
     if (movie.trailer) {
       window.open(movie.trailer, "_blank");
     }
+  };
+
+  const retryRecommendations = () => {
+    fetchRecommendations(id);
+  };
+
+  const retrySimilarMovies = () => {
+    fetchSimilarMovies(id);
   };
 
   if (loading) {
@@ -493,45 +518,70 @@ const MovieDetails = () => {
           )}
 
           {activeTab === "recommendations" && (
-            <div>
-              <h3 className="text-xl font-semibold mb-6">Recommended Movies</h3>
-              {recommendations.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                  {recommendations.slice(0, 12).map((movie) => (
-                    <MovieCard
-                      key={movie.id}
-                      movie={movie}
-                      size="small"
-                      onMovieClick={handleMovieClick}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-400">No recommendations available.</p>
-              )}
-            </div>
+            <MovieSection
+              title="Recommended Movies"
+              movies={recommendations}
+              loading={recommendationsLoading}
+              error={
+                recommendationsLoading
+                  ? null
+                  : recommendations.length === 0
+                  ? "No recommendations found"
+                  : null
+              }
+              showViewAll={false}
+              cardSize="medium"
+              onMovieClick={handleMovieClick}
+              onRetry={retryRecommendations}
+            />
           )}
 
           {activeTab === "similar" && (
-            <div>
-              <h3 className="text-xl font-semibold mb-6">Similar Movies</h3>
-              {similarMovies.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                  {similarMovies.slice(0, 12).map((movie) => (
-                    <MovieCard
-                      key={movie.id}
-                      movie={movie}
-                      size="small"
-                      onMovieClick={handleMovieClick}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-400">No similar movies available.</p>
-              )}
-            </div>
+            <MovieSection
+              title="Similar Movies"
+              movies={similarMovies}
+              loading={similarMoviesLoading}
+              error={
+                similarMoviesLoading
+                  ? null
+                  : similarMovies.length === 0
+                  ? "No similar movies found"
+                  : null
+              }
+              showViewAll={false}
+              cardSize="medium"
+              onMovieClick={handleMovieClick}
+              onRetry={retrySimilarMovies}
+            />
           )}
         </div>
+      </div>
+
+      {/* Bottom Sections - Always Show */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+        {/* Recommendations Section */}
+        <MovieSection
+          title="You Might Also Like"
+          movies={recommendations}
+          loading={recommendationsLoading}
+          error={null}
+          showViewAll={false}
+          cardSize="medium"
+          onMovieClick={handleMovieClick}
+          onRetry={retryRecommendations}
+        />
+
+        {/* Similar Movies Section */}
+        <MovieSection
+          title="More Like This"
+          movies={similarMovies}
+          loading={similarMoviesLoading}
+          error={null}
+          showViewAll={false}
+          cardSize="medium"
+          onMovieClick={handleMovieClick}
+          onRetry={retrySimilarMovies}
+        />
       </div>
     </div>
   );
