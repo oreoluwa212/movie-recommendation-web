@@ -1,18 +1,88 @@
 // utils/api.js
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-// Create axios instance with base configuration
 import axios from 'axios';
 
+// Cache implementation
+class APICache {
+    constructor() {
+        this.cache = new Map();
+        this.CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+    }
+
+    get(key) {
+        const cached = this.cache.get(key);
+        if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+            return cached.data;
+        }
+        return null;
+    }
+
+    set(key, data) {
+        this.cache.set(key, {
+            data,
+            timestamp: Date.now()
+        });
+    }
+
+    clear() {
+        this.cache.clear();
+    }
+}
+
+// Request queue for rate limiting
+class RequestQueue {
+    constructor(maxConcurrent = 2, delay = 1000) {
+        this.queue = [];
+        this.running = [];
+        this.maxConcurrent = maxConcurrent;
+        this.delay = delay;
+    }
+
+    async add(requestFunction) {
+        return new Promise((resolve, reject) => {
+            this.queue.push({
+                request: requestFunction,
+                resolve,
+                reject
+            });
+            this.process();
+        });
+    }
+
+    async process() {
+        if (this.running.length >= this.maxConcurrent || this.queue.length === 0) {
+            return;
+        }
+
+        const { request, resolve, reject } = this.queue.shift();
+        const promise = request()
+            .then(resolve)
+            .catch(reject)
+            .finally(() => {
+                this.running.splice(this.running.indexOf(promise), 1);
+                setTimeout(() => this.process(), this.delay);
+            });
+
+        this.running.push(promise);
+    }
+}
+
+// Initialize cache and request queue
+const apiCache = new APICache();
+const requestQueue = new RequestQueue(1, 2000); // 1 request every 2 seconds
+const ongoingRequests = new Map();
+
+// Enhanced axios instance with retry logic
 const api = axios.create({
     baseURL: API_BASE_URL,
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 10000, // 10 second timeout
+    timeout: 15000, // Increased timeout
 });
 
-// Request interceptor to add auth token
+// Enhanced request interceptor
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('authToken');
@@ -24,22 +94,84 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Response interceptor for error handling
+// Enhanced response interceptor with retry logic
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
+        const originalRequest = error.config;
+
+        // Handle 429 errors with exponential backoff
+        if (error.response?.status === 429 && !originalRequest._retry) {
+            originalRequest._retry = true;
+            originalRequest._retryCount = originalRequest._retryCount || 0;
+
+            if (originalRequest._retryCount < 3) {
+                originalRequest._retryCount++;
+                const delay = Math.pow(2, originalRequest._retryCount) * 1000 + Math.random() * 1000;
+
+                console.log(`Rate limited. Retrying in ${delay}ms... (Attempt ${originalRequest._retryCount}/3)`);
+
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return api(originalRequest);
+            }
+        }
+
+        // Handle 401 errors
         if (error.response?.status === 401) {
-            // Handle unauthorized access
             localStorage.removeItem('authToken');
             window.location.href = '/login';
         }
+
         return Promise.reject(error);
     }
 );
 
-// Auth API functions
+// Enhanced request function with caching and queuing
+const makeRequest = async (requestFn, cacheKey = null, useQueue = false) => {
+    // Check cache first
+    if (cacheKey) {
+        const cachedData = apiCache.get(cacheKey);
+        if (cachedData) {
+            console.log(`Using cached data for ${cacheKey}`);
+            return cachedData;
+        }
+    }
+
+    // Check for ongoing requests
+    if (cacheKey && ongoingRequests.has(cacheKey)) {
+        console.log(`Waiting for ongoing request: ${cacheKey}`);
+        return ongoingRequests.get(cacheKey);
+    }
+
+    // Create the request promise
+    const requestPromise = useQueue
+        ? requestQueue.add(requestFn)
+        : requestFn();
+
+    // Store ongoing request
+    if (cacheKey) {
+        ongoingRequests.set(cacheKey, requestPromise);
+    }
+
+    try {
+        const result = await requestPromise;
+
+        // Cache the result
+        if (cacheKey) {
+            apiCache.set(cacheKey, result);
+        }
+
+        return result;
+    } finally {
+        // Clean up ongoing request
+        if (cacheKey) {
+            ongoingRequests.delete(cacheKey);
+        }
+    }
+};
+
+// Auth API functions (unchanged)
 export const authApi = {
-    // User registration
     register: async (userData) => {
         try {
             const response = await api.post('/auth/register', userData);
@@ -49,7 +181,6 @@ export const authApi = {
         }
     },
 
-    // User login
     login: async (credentials) => {
         try {
             const response = await api.post('/auth/login', credentials);
@@ -62,7 +193,6 @@ export const authApi = {
         }
     },
 
-    // Get current user
     getCurrentUser: async () => {
         try {
             const response = await api.get('/auth/me');
@@ -72,129 +202,150 @@ export const authApi = {
         }
     },
 
-    // Logout
     logout: () => {
         localStorage.removeItem('authToken');
+        apiCache.clear(); // Clear cache on logout
         window.location.href = '/login';
     }
 };
 
-// Movie API functions
+// Enhanced Movie API functions with caching and rate limiting
 export const movieApi = {
-    // Get popular movies
     getPopularMovies: async (page = 1) => {
-        try {
-            const response = await api.get(`/movies/discover/popular?page=${page}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch popular movies');
-        }
+        const cacheKey = `popular-movies-${page}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/movies/discover/popular?page=${page}`);
+                return response.data;
+            },
+            cacheKey,
+            true // Use queue for rate limiting
+        );
     },
 
-    // Get top rated movies
     getTopRatedMovies: async (page = 1) => {
-        try {
-            const response = await api.get(`/movies/discover/top-rated?page=${page}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch top rated movies');
-        }
+        const cacheKey = `top-rated-movies-${page}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/movies/discover/top-rated?page=${page}`);
+                return response.data;
+            },
+            cacheKey,
+            true
+        );
     },
 
-    // Get now playing movies
     getNowPlayingMovies: async (page = 1) => {
-        try {
-            const response = await api.get(`/movies/discover/now-playing?page=${page}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch now playing movies');
-        }
+        const cacheKey = `now-playing-movies-${page}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/movies/discover/now-playing?page=${page}`);
+                return response.data;
+            },
+            cacheKey,
+            true
+        );
     },
 
-    // Get upcoming movies
     getUpcomingMovies: async (page = 1) => {
-        try {
-            const response = await api.get(`/movies/discover/upcoming?page=${page}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch upcoming movies');
-        }
+        const cacheKey = `upcoming-movies-${page}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/movies/discover/upcoming?page=${page}`);
+                return response.data;
+            },
+            cacheKey,
+            true
+        );
     },
 
-    // Search movies
     searchMovies: async (query, page = 1) => {
-        try {
-            const response = await api.get(`/movies/search?query=${encodeURIComponent(query)}&page=${page}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to search movies');
-        }
+        const cacheKey = `search-${query}-${page}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/movies/search?query=${encodeURIComponent(query)}&page=${page}`);
+                return response.data;
+            },
+            cacheKey,
+            true
+        );
     },
 
-    // Get movie details
     getMovieDetails: async (id) => {
-        try {
-            const response = await api.get(`/movies/${id}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch movie details');
-        }
+        const cacheKey = `movie-details-${id}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/movies/${id}`);
+                return response.data;
+            },
+            cacheKey,
+            true
+        );
     },
 
-    // Get genres
     getGenres: async () => {
-        try {
-            const response = await api.get('/movies/data/genres');
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch genres');
-        }
+        const cacheKey = 'genres';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/movies/data/genres');
+                return response.data;
+            },
+            cacheKey,
+            true
+        );
     },
 
-    // Get movies by genre
     getMoviesByGenre: async (genreId, page = 1) => {
-        try {
-            const response = await api.get(`/movies/genre/${genreId}?page=${page}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch movies by genre');
-        }
+        const cacheKey = `movies-genre-${genreId}-${page}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/movies/genre/${genreId}?page=${page}`);
+                return response.data;
+            },
+            cacheKey,
+            true
+        );
     },
 
-    // Get movie recommendations
     getMovieRecommendations: async (movieId, page = 1) => {
-        try {
-            const response = await api.get(`/movies/${movieId}/recommendations?page=${page}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch movie recommendations');
-        }
+        const cacheKey = `movie-recommendations-${movieId}-${page}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/movies/${movieId}/recommendations?page=${page}`);
+                return response.data;
+            },
+            cacheKey,
+            true
+        );
     },
 
-    // Get similar movies
     getSimilarMovies: async (movieId, page = 1) => {
-        try {
-            const response = await api.get(`/movies/${movieId}/similar?page=${page}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch similar movies');
-        }
+        const cacheKey = `similar-movies-${movieId}-${page}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/movies/${movieId}/similar?page=${page}`);
+                return response.data;
+            },
+            cacheKey,
+            true
+        );
     },
 
-    // Get personalized recommendations
     getPersonalizedRecommendations: async () => {
-        try {
-            const response = await api.get('/movies/recommendations/personalized');
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch personalized recommendations');
-        }
+        const cacheKey = 'personalized-recommendations';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/movies/recommendations/personalized');
+                return response.data;
+            },
+            cacheKey,
+            true
+        );
     }
 };
 
-// User API functions
+// User API functions (unchanged, but can be enhanced similarly if needed)
 export const userApi = {
-    // Update user profile
     updateProfile: async (profileData) => {
         try {
             const response = await api.put('/users/profile', profileData);
@@ -204,7 +355,6 @@ export const userApi = {
         }
     },
 
-    // Add favorite movie
     addFavorite: async (movieData) => {
         try {
             const response = await api.post('/users/favorites', movieData);
@@ -214,27 +364,28 @@ export const userApi = {
         }
     },
 
-    // Get user's favorites
     getFavorites: async () => {
-        try {
-            const response = await api.get('/users/favorites');
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch favorites');
-        }
+        const cacheKey = 'user-favorites';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/users/favorites');
+                return response.data;
+            },
+            cacheKey
+        );
     },
 
-    // Remove favorite movie
     removeFavorite: async (movieId) => {
         try {
             const response = await api.delete(`/users/favorites/${movieId}`);
+            // Clear favorites cache when removing
+            apiCache.cache.delete('user-favorites');
             return response.data;
         } catch (error) {
             throw new Error(error.response?.data?.message || 'Failed to remove favorite');
         }
     },
 
-    // Add movie to watched list
     addToWatched: async (movieData) => {
         try {
             const response = await api.post('/users/watched', movieData);
@@ -244,20 +395,20 @@ export const userApi = {
         }
     },
 
-    // Get user's watched movies
     getWatched: async () => {
-        try {
-            const response = await api.get('/users/watched');
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch watched movies');
-        }
+        const cacheKey = 'user-watched';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/users/watched');
+                return response.data;
+            },
+            cacheKey
+        );
     }
 };
 
-// Reviews API functions
+// Reviews API functions (unchanged)
 export const reviewsApi = {
-    // Create or update review
     createOrUpdateReview: async (reviewData) => {
         try {
             const response = await api.post('/reviews', reviewData);
@@ -267,27 +418,28 @@ export const reviewsApi = {
         }
     },
 
-    // Get reviews for a movie
     getMovieReviews: async (movieId, page = 1, limit = 5) => {
-        try {
-            const response = await api.get(`/reviews/movie/${movieId}?page=${page}&limit=${limit}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch movie reviews');
-        }
+        const cacheKey = `movie-reviews-${movieId}-${page}-${limit}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/reviews/movie/${movieId}?page=${page}&limit=${limit}`);
+                return response.data;
+            },
+            cacheKey
+        );
     },
 
-    // Get review by ID
     getReviewById: async (reviewId) => {
-        try {
-            const response = await api.get(`/reviews/${reviewId}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch review');
-        }
+        const cacheKey = `review-${reviewId}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/reviews/${reviewId}`);
+                return response.data;
+            },
+            cacheKey
+        );
     },
 
-    // Delete review by ID
     deleteReview: async (reviewId) => {
         try {
             const response = await api.delete(`/reviews/${reviewId}`);
@@ -297,30 +449,31 @@ export const reviewsApi = {
         }
     },
 
-    // Get logged in user's reviews
     getUserReviews: async () => {
-        try {
-            const response = await api.get('/reviews/user/me');
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch user reviews');
-        }
+        const cacheKey = 'user-reviews';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/reviews/user/me');
+                return response.data;
+            },
+            cacheKey
+        );
     },
 
-    // Get user's review for specific movie
     getUserReviewForMovie: async (movieId) => {
-        try {
-            const response = await api.get(`/reviews/user/movie/${movieId}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch user review for movie');
-        }
+        const cacheKey = `user-review-movie-${movieId}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/reviews/user/movie/${movieId}`);
+                return response.data;
+            },
+            cacheKey
+        );
     }
 };
 
-// Watchlists API functions
+// Watchlists API functions (unchanged)
 export const watchlistsApi = {
-    // Create a watchlist
     createWatchlist: async (watchlistData) => {
         try {
             const response = await api.post('/watchlists', watchlistData);
@@ -330,27 +483,28 @@ export const watchlistsApi = {
         }
     },
 
-    // Get all user's watchlists
     getUserWatchlists: async () => {
-        try {
-            const response = await api.get('/watchlists');
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch watchlists');
-        }
+        const cacheKey = 'user-watchlists';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/watchlists');
+                return response.data;
+            },
+            cacheKey
+        );
     },
 
-    // Get watchlist by ID
     getWatchlistById: async (watchlistId) => {
-        try {
-            const response = await api.get(`/watchlists/${watchlistId}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch watchlist');
-        }
+        const cacheKey = `watchlist-${watchlistId}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/watchlists/${watchlistId}`);
+                return response.data;
+            },
+            cacheKey
+        );
     },
 
-    // Update a watchlist
     updateWatchlist: async (watchlistId, watchlistData) => {
         try {
             const response = await api.put(`/watchlists/${watchlistId}`, watchlistData);
@@ -360,7 +514,6 @@ export const watchlistsApi = {
         }
     },
 
-    // Delete a watchlist
     deleteWatchlist: async (watchlistId) => {
         try {
             const response = await api.delete(`/watchlists/${watchlistId}`);
@@ -370,7 +523,6 @@ export const watchlistsApi = {
         }
     },
 
-    // Add a movie to watchlist
     addMovieToWatchlist: async (watchlistId, movieData) => {
         try {
             const response = await api.post(`/watchlists/${watchlistId}/movies`, movieData);
@@ -380,7 +532,6 @@ export const watchlistsApi = {
         }
     },
 
-    // Remove a movie from watchlist
     removeMovieFromWatchlist: async (watchlistId, movieId) => {
         try {
             const response = await api.delete(`/watchlists/${watchlistId}/movies/${movieId}`);
@@ -390,14 +541,33 @@ export const watchlistsApi = {
         }
     },
 
-    // Get public watchlists
     getPublicWatchlists: async (page = 1, limit = 10) => {
-        try {
-            const response = await api.get(`/watchlists/public/all?page=${page}&limit=${limit}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to fetch public watchlists');
-        }
+        const cacheKey = `public-watchlists-${page}-${limit}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/watchlists/public/all?page=${page}&limit=${limit}`);
+                return response.data;
+            },
+            cacheKey
+        );
+    }
+};
+
+// Utility functions for cache management
+export const cacheUtils = {
+    clearCache: () => {
+        apiCache.clear();
+        console.log('API cache cleared');
+    },
+
+    clearCacheByPattern: (pattern) => {
+        const keys = Array.from(apiCache.cache.keys());
+        keys.forEach(key => {
+            if (key.includes(pattern)) {
+                apiCache.cache.delete(key);
+            }
+        });
+        console.log(`Cache cleared for pattern: ${pattern}`);
     }
 };
 
