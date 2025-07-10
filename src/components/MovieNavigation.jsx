@@ -45,7 +45,6 @@ const MovieNavigation = () => {
                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
             }`}
           >
-            <Icon className="h-4 w-4" />
             <span>{title}</span>
           </Link>
         ))}

@@ -4,10 +4,10 @@ import Footer from "./components/layout/Footer";
 import Home from "./pages/Home";
 import SearchResults from "./pages/SearchResults";
 import MovieListingPage from "./pages/MovieListing";
+import MovieDetails from "./pages/MovieDetails";
 // import Login from "./pages/auth/Login";
 // import Register from "./pages/auth/Register";
 // import Profile from "./pages/Profile";
-// import MovieDetails from "./pages/MovieDetails";
 // import Watchlists from "./pages/Watchlists";
 // import WatchlistDetail from "./pages/WatchlistDetail";
 // import Reviews from "./pages/Reviews";
@@ -26,6 +26,7 @@ function App() {
             {/* Public Routes */}
             <Route path="/" element={<Home />} />
             <Route path="/search" element={<SearchResults />} />
+            <Route path="/movie/:id" element={<MovieDetails />} />
 
             {/* Movie Listing Routes */}
             <Route path="/popular" element={<MovieListingPage />} />
@@ -39,8 +40,7 @@ function App() {
             <Route path="/movies/:category" element={<MovieListingPage />} />
 
             {/* <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/movie/:id" element={<MovieDetails />} /> */}
+                  <Route path="/register" element={<Register />} /> */}
 
             {/* Protected Routes */}
             {/* <Route

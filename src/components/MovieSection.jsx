@@ -1,26 +1,30 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
-import MovieCard from './MovieCard';
-import { Link } from 'react-router-dom';
+import React, { useRef, useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import MovieCard from "./MovieCard";
+import { Link } from "react-router-dom";
 
-const MovieSection = ({ 
-  title, 
-  movies = [], 
-  loading = false, 
+const MovieSection = ({
+  title,
+  movies = [],
+  loading = false,
   error = null,
   showViewAll = true,
   viewAllLink = null,
-  cardSize = 'medium',
+  cardSize = "medium",
   showActions = true,
-  onRetry
+  onRetry,
+  onMovieClick, // Add this prop for custom handling
 }) => {
   const scrollContainerRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const navigate = useNavigate();
 
   const checkScrollButtons = () => {
     if (scrollContainerRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+      const { scrollLeft, scrollWidth, clientWidth } =
+        scrollContainerRef.current;
       setCanScrollLeft(scrollLeft > 0);
       setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
     }
@@ -32,16 +36,27 @@ const MovieSection = ({
 
   const scroll = (direction) => {
     if (scrollContainerRef.current) {
-      const cardWidth = cardSize === 'small' ? 160 : cardSize === 'medium' ? 192 : 224;
-      const scrollAmount = direction === 'left' ? -cardWidth * 2 : cardWidth * 2;
-      
+      const cardWidth =
+        cardSize === "small" ? 160 : cardSize === "medium" ? 192 : 224;
+      const scrollAmount =
+        direction === "left" ? -cardWidth * 2 : cardWidth * 2;
+
       scrollContainerRef.current.scrollBy({
         left: scrollAmount,
-        behavior: 'smooth'
+        behavior: "smooth",
       });
-      
+
       // Update scroll buttons after animation
       setTimeout(checkScrollButtons, 300);
+    }
+  };
+
+  // Handle movie click - either use custom handler or default navigation
+  const handleMovieClick = (movie) => {
+    if (onMovieClick) {
+      onMovieClick(movie);
+    } else {
+      navigate(`/movie/${movie.id}`);
     }
   };
 
@@ -56,9 +71,11 @@ const MovieSection = ({
             <div
               key={i}
               className={`${
-                cardSize === 'small' ? 'w-40 h-60' :
-                cardSize === 'medium' ? 'w-48 h-72' :
-                'w-56 h-80'
+                cardSize === "small"
+                  ? "w-40 h-60"
+                  : cardSize === "medium"
+                  ? "w-48 h-72"
+                  : "w-56 h-80"
               } bg-gray-800 rounded-lg animate-pulse flex-shrink-0`}
             />
           ))}
@@ -117,29 +134,29 @@ const MovieSection = ({
               View All
             </Link>
           )}
-          
+
           {/* Scroll Buttons */}
           {movies.length > 3 && showActions && (
             <div className="flex items-center space-x-2">
               <button
-                onClick={() => scroll('left')}
+                onClick={() => scroll("left")}
                 disabled={!canScrollLeft}
                 className={`p-2 rounded-full transition-colors ${
                   canScrollLeft
-                    ? 'bg-gray-800 hover:bg-gray-700 text-white'
-                    : 'bg-gray-800/50 text-gray-500 cursor-not-allowed'
+                    ? "bg-gray-800 hover:bg-gray-700 text-white"
+                    : "bg-gray-800/50 text-gray-500 cursor-not-allowed"
                 }`}
                 aria-label="Scroll left"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
               <button
-                onClick={() => scroll('right')}
+                onClick={() => scroll("right")}
                 disabled={!canScrollRight}
                 className={`p-2 rounded-full transition-colors ${
                   canScrollRight
-                    ? 'bg-gray-800 hover:bg-gray-700 text-white'
-                    : 'bg-gray-800/50 text-gray-500 cursor-not-allowed'
+                    ? "bg-gray-800 hover:bg-gray-700 text-white"
+                    : "bg-gray-800/50 text-gray-500 cursor-not-allowed"
                 }`}
                 aria-label="Scroll right"
               >
@@ -156,21 +173,24 @@ const MovieSection = ({
           ref={scrollContainerRef}
           className="flex space-x-4 overflow-x-auto scrollbar-hide pb-4"
           onScroll={checkScrollButtons}
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {movies.map((movie, index) => (
             <div
               key={`${movie.id}-${index}`}
               className={`flex-shrink-0 ${
-                cardSize === 'small' ? 'w-40' :
-                cardSize === 'medium' ? 'w-48' :
-                'w-56'
+                cardSize === "small"
+                  ? "w-40"
+                  : cardSize === "medium"
+                  ? "w-48"
+                  : "w-56"
               }`}
             >
-              <MovieCard 
-                movie={movie} 
+              <MovieCard
+                movie={movie}
                 size={cardSize}
                 showActions={showActions}
+                onMovieClick={handleMovieClick}
               />
             </div>
           ))}

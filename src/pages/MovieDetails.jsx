@@ -1,0 +1,540 @@
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  Star,
+  Calendar,
+  Clock,
+  Heart,
+  Plus,
+  Eye,
+  Play,
+  ArrowLeft,
+  Users,
+  Globe,
+  DollarSign,
+} from "lucide-react";
+import { movieApi } from "../utils/api";
+import MovieCard from "../components/MovieCard";
+
+const MovieDetails = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [movie, setMovie] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
+  const [similarMovies, setSimilarMovies] = useState([]);
+  const [activeTab, setActiveTab] = useState("overview");
+
+  useEffect(() => {
+    const fetchMovieData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch movie details
+        const movieResponse = await movieApi.getMovieDetails(id);
+        // Handle the nested data structure from your API
+        const movieData = movieResponse.data || movieResponse;
+        setMovie(movieData);
+
+        // Fetch recommendations and similar movies
+        try {
+          const [recResponse, similarResponse] = await Promise.all([
+            movieApi.getMovieRecommendations(id),
+            movieApi.getSimilarMovies(id),
+          ]);
+          setRecommendations(
+            recResponse.data?.results || recResponse.results || []
+          );
+          setSimilarMovies(
+            similarResponse.data?.results || similarResponse.results || []
+          );
+        } catch (err) {
+          console.log("Error fetching recommendations/similar movies:", err);
+          // Don't set error state for these non-critical requests
+        }
+      } catch (err) {
+        setError(err.message || "Failed to load movie details");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (id) {
+      fetchMovieData();
+    }
+  }, [id]);
+
+  const handleAddToFavorites = async () => {
+    try {
+      console.log("Adding to favorites:", movie.title);
+      // Implement API call here
+    } catch (err) {
+      console.error("Error adding to favorites:", err);
+    }
+  };
+
+  const handleAddToWatchlist = async () => {
+    try {
+      console.log("Adding to watchlist:", movie.title);
+      // Implement API call here
+    } catch (err) {
+      console.error("Error adding to watchlist:", err);
+    }
+  };
+
+  const handleMarkAsWatched = async () => {
+    try {
+      console.log("Marking as watched:", movie.title);
+      // Implement API call here
+    } catch (err) {
+      console.error("Error marking as watched:", err);
+    }
+  };
+
+  const handleMovieClick = (clickedMovie) => {
+    navigate(`/movie/${clickedMovie.id}`);
+  };
+
+  const handleWatchTrailer = () => {
+    if (movie.trailer) {
+      window.open(movie.trailer, "_blank");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xl">Loading movie details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Error Loading Movie</h2>
+          <p className="text-gray-400 mb-6">{error}</p>
+          <button
+            onClick={() => navigate("/")}
+            className="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg transition-colors"
+          >
+            Go Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!movie) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <p className="text-xl">Movie not found</p>
+      </div>
+    );
+  }
+
+  // Handle the new API response format
+  const backdropUrl = movie.backdrop || null;
+  const posterUrl =
+    movie.poster ||
+    "https://via.placeholder.com/500x750/1f2937/9ca3af?text=No+Image";
+  const releaseYear = movie.releaseDate
+    ? new Date(movie.releaseDate).getFullYear()
+    : null;
+  const rating = movie.rating;
+  const runtime = movie.runtime;
+  const genres = movie.genres || [];
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white">
+      {/* Hero Section */}
+      <div className="relative">
+        {/* Backdrop */}
+        {backdropUrl && (
+          <div className="absolute inset-0 z-0">
+            <img
+              src={backdropUrl}
+              alt={movie.title}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/70"></div>
+          </div>
+        )}
+
+        {/* Content */}
+        <div className="relative z-10 pt-20 pb-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Back Button */}
+            <button
+              onClick={() => navigate(-1)}
+              className="flex items-center space-x-2 text-gray-300 hover:text-white mb-8 transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+              <span>Back</span>
+            </button>
+
+            <div className="flex flex-col lg:flex-row gap-8">
+              {/* Movie Poster */}
+              <div className="flex-shrink-0">
+                <img
+                  src={posterUrl}
+                  alt={movie.title}
+                  className="w-80 h-auto rounded-lg shadow-2xl mx-auto lg:mx-0"
+                />
+              </div>
+
+              {/* Movie Info */}
+              <div className="flex-1">
+                <h1 className="text-4xl lg:text-5xl font-bold mb-4">
+                  {movie.title}
+                </h1>
+
+                {movie.tagline && (
+                  <p className="text-xl text-gray-300 italic mb-6">
+                    {movie.tagline}
+                  </p>
+                )}
+
+                {/* Meta Info */}
+                <div className="flex flex-wrap items-center gap-6 mb-6">
+                  {rating && (
+                    <div className="flex items-center space-x-2">
+                      <Star className="h-5 w-5 text-yellow-400 fill-current" />
+                      <span className="text-lg font-semibold">
+                        {rating.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+
+                  {releaseYear && (
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="h-5 w-5 text-gray-400" />
+                      <span>{releaseYear}</span>
+                    </div>
+                  )}
+
+                  {runtime && (
+                    <div className="flex items-center space-x-2">
+                      <Clock className="h-5 w-5 text-gray-400" />
+                      <span>{runtime} min</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Genres */}
+                {genres.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {genres.map((genre) => (
+                      <span
+                        key={genre.id}
+                        className="bg-red-600/20 text-red-400 px-3 py-1 rounded-full text-sm"
+                      >
+                        {genre.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-4 mb-8">
+                  {movie.trailer && (
+                    <button
+                      onClick={handleWatchTrailer}
+                      className="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors"
+                    >
+                      <Play className="h-5 w-5" />
+                      <span>Watch Trailer</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handleAddToFavorites}
+                    className="bg-gray-800 hover:bg-gray-700 px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors"
+                  >
+                    <Heart className="h-5 w-5" />
+                    <span>Add to Favorites</span>
+                  </button>
+
+                  <button
+                    onClick={handleAddToWatchlist}
+                    className="bg-gray-800 hover:bg-gray-700 px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors"
+                  >
+                    <Plus className="h-5 w-5" />
+                    <span>Add to Watchlist</span>
+                  </button>
+
+                  <button
+                    onClick={handleMarkAsWatched}
+                    className="bg-gray-800 hover:bg-gray-700 px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors"
+                  >
+                    <Eye className="h-5 w-5" />
+                    <span>Mark as Watched</span>
+                  </button>
+                </div>
+
+                {/* Overview */}
+                {movie.overview && (
+                  <div>
+                    <h3 className="text-xl font-semibold mb-3">Overview</h3>
+                    <p className="text-gray-300 leading-relaxed text-lg">
+                      {movie.overview}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Additional Details */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Tabs */}
+        <div className="border-b border-gray-800 mb-8">
+          <nav className="flex space-x-8">
+            {[
+              { id: "overview", label: "Details" },
+              { id: "cast", label: "Cast & Crew" },
+              { id: "recommendations", label: "Recommendations" },
+              { id: "similar", label: "Similar Movies" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === tab.id
+                    ? "border-red-600 text-red-600"
+                    : "border-transparent text-gray-400 hover:text-gray-300"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        <div>
+          {activeTab === "overview" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Production Info */}
+              <div>
+                <h3 className="text-xl font-semibold mb-4">
+                  Production Details
+                </h3>
+                <div className="space-y-3">
+                  {movie.budget && (
+                    <div className="flex items-center space-x-3">
+                      <DollarSign className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-300">
+                        Budget: ${movie.budget.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+
+                  {movie.revenue && (
+                    <div className="flex items-center space-x-3">
+                      <DollarSign className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-300">
+                        Revenue: ${movie.revenue.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+
+                  {movie.originalLanguage && (
+                    <div className="flex items-center space-x-3">
+                      <Globe className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-300">
+                        Language: {movie.originalLanguage.toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+
+                  {movie.voteCount && (
+                    <div className="flex items-center space-x-3">
+                      <Users className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-300">
+                        Votes: {movie.voteCount.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Additional Info */}
+              <div>
+                <h3 className="text-xl font-semibold mb-4">
+                  Additional Information
+                </h3>
+                <div className="space-y-3">
+                  {movie.status && (
+                    <div>
+                      <span className="text-gray-400">Status: </span>
+                      <span className="text-gray-300">{movie.status}</span>
+                    </div>
+                  )}
+
+                  {movie.originalTitle &&
+                    movie.originalTitle !== movie.title && (
+                      <div>
+                        <span className="text-gray-400">Original Title: </span>
+                        <span className="text-gray-300">
+                          {movie.originalTitle}
+                        </span>
+                      </div>
+                    )}
+
+                  {movie.productionCompanies &&
+                    movie.productionCompanies.length > 0 && (
+                      <div>
+                        <span className="text-gray-400">
+                          Production Companies:{" "}
+                        </span>
+                        <span className="text-gray-300">
+                          {movie.productionCompanies
+                            .map((company) => company.name)
+                            .join(", ")}
+                        </span>
+                      </div>
+                    )}
+
+                  {movie.director && (
+                    <div>
+                      <span className="text-gray-400">Director: </span>
+                      <span className="text-gray-300">{movie.director}</span>
+                    </div>
+                  )}
+
+                  {movie.producer && (
+                    <div>
+                      <span className="text-gray-400">Producer: </span>
+                      <span className="text-gray-300">{movie.producer}</span>
+                    </div>
+                  )}
+
+                  {movie.writer && (
+                    <div>
+                      <span className="text-gray-400">Writer: </span>
+                      <span className="text-gray-300">{movie.writer}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "cast" && (
+            <div>
+              <h3 className="text-xl font-semibold mb-6">Cast & Crew</h3>
+
+              {/* Cast */}
+              {movie.cast && movie.cast.length > 0 && (
+                <div className="mb-8">
+                  <h4 className="text-lg font-medium mb-4">Main Cast</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    {movie.cast.slice(0, 10).map((actor) => (
+                      <div key={actor.id} className="text-center">
+                        <img
+                          src={
+                            actor.profilePath ||
+                            "https://via.placeholder.com/150x200/1f2937/9ca3af?text=No+Image"
+                          }
+                          alt={actor.name}
+                          className="w-full h-32 object-cover rounded-lg mb-2"
+                        />
+                        <p className="text-sm font-medium text-white">
+                          {actor.name}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {actor.character}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Crew */}
+              {movie.crew && movie.crew.length > 0 && (
+                <div>
+                  <h4 className="text-lg font-medium mb-4">Key Crew</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {movie.crew.slice(0, 8).map((member) => (
+                      <div
+                        key={member.id}
+                        className="flex items-center space-x-3"
+                      >
+                        <img
+                          src={
+                            member.profilePath ||
+                            "https://via.placeholder.com/60x80/1f2937/9ca3af?text=No+Image"
+                          }
+                          alt={member.name}
+                          className="w-12 h-16 object-cover rounded"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-white">
+                            {member.name}
+                          </p>
+                          <p className="text-xs text-gray-400">{member.job}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "recommendations" && (
+            <div>
+              <h3 className="text-xl font-semibold mb-6">Recommended Movies</h3>
+              {recommendations.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {recommendations.slice(0, 12).map((movie) => (
+                    <MovieCard
+                      key={movie.id}
+                      movie={movie}
+                      size="small"
+                      onMovieClick={handleMovieClick}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-400">No recommendations available.</p>
+              )}
+            </div>
+          )}
+
+          {activeTab === "similar" && (
+            <div>
+              <h3 className="text-xl font-semibold mb-6">Similar Movies</h3>
+              {similarMovies.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {similarMovies.slice(0, 12).map((movie) => (
+                    <MovieCard
+                      key={movie.id}
+                      movie={movie}
+                      size="small"
+                      onMovieClick={handleMovieClick}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-400">No similar movies available.</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default MovieDetails;

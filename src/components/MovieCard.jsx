@@ -1,28 +1,31 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Star, Play, Heart, Eye, Plus, Calendar } from "lucide-react";
 
 // Movie Card Skeleton
-const MovieCardSkeleton = ({ size = 'medium' }) => {
+const MovieCardSkeleton = ({ size = "medium" }) => {
   const sizeClasses = {
-    small: 'w-40',
-    medium: 'w-48',
-    large: 'w-56'
+    small: "w-40",
+    medium: "w-48",
+    large: "w-56",
   };
 
   const posterSizeClasses = {
-    small: 'h-56',
-    medium: 'h-64',
-    large: 'h-72'
+    small: "h-56",
+    medium: "h-64",
+    large: "h-72",
   };
 
   return (
     <div className={`${sizeClasses[size]} flex-shrink-0`}>
       {/* Poster skeleton */}
-      <div className={`animate-pulse ${posterSizeClasses[size]} bg-gray-800 rounded-lg mb-2`} />
-      
+      <div
+        className={`animate-pulse ${posterSizeClasses[size]} bg-gray-800 rounded-lg mb-2`}
+      />
+
       {/* Title skeleton */}
       <div className="animate-pulse h-4 bg-gray-700 rounded w-4/5 mb-2" />
-      
+
       {/* Rating and year skeleton */}
       <div className="flex items-center justify-between">
         <div className="animate-pulse h-3 bg-gray-700 rounded w-12" />
@@ -37,11 +40,12 @@ const MovieCard = ({
   size = "medium",
   showActions = true,
   isAuthenticated = true,
-  onMovieClick,
+  onMovieClick, // Keep this for backward compatibility
   isLoading = false,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const navigate = useNavigate();
 
   // Show skeleton while loading
   if (isLoading) {
@@ -89,9 +93,15 @@ const MovieCard = ({
     console.log("Mark as watched:", movie.title);
   };
 
-  const handleMovieClick = () => {
+  const handleMovieClick = (e) => {
+    e.preventDefault();
+
+    // If there's a custom onMovieClick handler, use it
     if (onMovieClick) {
       onMovieClick(movie);
+    } else {
+      // Default navigation behavior
+      navigate(`/movie/${movie.id}`);
     }
   };
 
@@ -127,7 +137,8 @@ const MovieCard = ({
           }`}
           onLoad={() => setImageLoaded(true)}
           onError={(e) => {
-            e.target.src = "https://via.placeholder.com/400x600/1f2937/9ca3af?text=No+Image";
+            e.target.src =
+              "https://via.placeholder.com/400x600/1f2937/9ca3af?text=No+Image";
             setImageLoaded(true);
           }}
         />
