@@ -73,36 +73,43 @@ const apiCache = new APICache();
 const requestQueue = new RequestQueue(1, 2000); // 1 request every 2 seconds
 const ongoingRequests = new Map();
 
-// Enhanced axios instance with retry logic
+// Enhanced axios instance
 const api = axios.create({
     baseURL: API_BASE_URL,
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 15000, // Increased timeout
+    timeout: 15000,
 });
 
 // Enhanced request interceptor
 api.interceptors.request.use(
     (config) => {
+        // Get token from localStorage (most up-to-date)
         const token = localStorage.getItem('authToken');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
-        console.log('Making API request:', config.method?.toUpperCase(), config.url);
+        console.log('🚀 Making API request:', config.method?.toUpperCase(), config.url);
+        console.log('🚀 Request data:', config.data);
         return config;
     },
-    (error) => Promise.reject(error)
+    (error) => {
+        console.error('❌ Request interceptor error:', error);
+        return Promise.reject(error);
+    }
 );
 
-// Enhanced response interceptor with retry logic
+// Enhanced response interceptor
 api.interceptors.response.use(
     (response) => {
-        console.log('API response received:', response.config.url, response.status);
+        console.log('✅ API response received:', response.config.url, response.status);
+        console.log('✅ Response data:', response.data);
         return response;
     },
     async (error) => {
-        console.error('API error:', error.config?.url, error.response?.status, error.message);
+        console.error('❌ API error:', error.config?.url, error.response?.status, error.message);
+        console.error('❌ Error response data:', error.response?.data);
 
         const originalRequest = error.config;
 
@@ -115,17 +122,22 @@ api.interceptors.response.use(
                 originalRequest._retryCount++;
                 const delay = Math.pow(2, originalRequest._retryCount) * 1000 + Math.random() * 1000;
 
-                console.log(`Rate limited. Retrying in ${delay}ms... (Attempt ${originalRequest._retryCount}/3)`);
+                console.log(`🔄 Rate limited. Retrying in ${delay}ms... (Attempt ${originalRequest._retryCount}/3)`);
 
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return api(originalRequest);
             }
         }
 
-        // Handle 401 errors
+        // Handle 401 errors (unauthorized)
         if (error.response?.status === 401) {
+            console.log('🔒 Unauthorized request - clearing auth data');
             localStorage.removeItem('authToken');
-            window.location.href = '/login';
+            // Don't redirect here - let the auth store handle it
+            // Instead, dispatch a custom event that the auth store can listen to
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('auth-logout'));
+            }
         }
 
         return Promise.reject(error);
@@ -138,14 +150,14 @@ const makeRequest = async (requestFn, cacheKey = null, useQueue = false) => {
     if (cacheKey) {
         const cachedData = apiCache.get(cacheKey);
         if (cachedData) {
-            console.log(`Using cached data for ${cacheKey}`);
+            console.log(`📦 Using cached data for ${cacheKey}`);
             return cachedData;
         }
     }
 
     // Check for ongoing requests
     if (cacheKey && ongoingRequests.has(cacheKey)) {
-        console.log(`Waiting for ongoing request: ${cacheKey}`);
+        console.log(`⏳ Waiting for ongoing request: ${cacheKey}`);
         return ongoingRequests.get(cacheKey);
     }
 
@@ -173,6 +185,190 @@ const makeRequest = async (requestFn, cacheKey = null, useQueue = false) => {
         if (cacheKey) {
             ongoingRequests.delete(cacheKey);
         }
+    }
+};
+
+// Enhanced Auth API functions
+export const authApi = {
+    register: async (userData) => {
+        try {
+            console.log('🔐 AuthAPI: Starting registration for:', { ...userData, password: '[HIDDEN]' });
+
+            // Make the API call
+            const response = await api.post('/auth/register', userData);
+
+            console.log('🔐 AuthAPI: Registration response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('🔐 AuthAPI: Registration failed:', error);
+            console.error('🔐 AuthAPI: Error details:', {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                message: error.message
+            });
+
+            // Create a proper error message
+            let errorMessage = 'Registration failed';
+
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.response?.data?.error) {
+                errorMessage = error.response.data.error;
+            } else if (error.response?.data) {
+                // Handle case where error is directly in data
+                errorMessage = typeof error.response.data === 'string'
+                    ? error.response.data
+                    : 'Registration failed';
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            // Create a new error with the message
+            const finalError = new Error(errorMessage);
+            finalError.response = error.response;
+            finalError.status = error.response?.status;
+
+            throw finalError;
+        }
+    },
+
+    login: async (credentials) => {
+        try {
+            console.log('🔐 AuthAPI: Starting login for:', { ...credentials, password: '[HIDDEN]' });
+            const response = await api.post('/auth/login', credentials);
+            console.log('🔐 AuthAPI: Login response:', { ...response.data, password: '[HIDDEN]' });
+
+            // Store token immediately
+            if (response.data.token) {
+                localStorage.setItem('authToken', response.data.token);
+            }
+
+            return response.data;
+        } catch (error) {
+            console.error('🔐 AuthAPI: Login failed:', error.response?.data || error.message);
+            const errorMessage = error.response?.data?.message ||
+                error.response?.data?.error ||
+                error.message ||
+                'Login failed';
+            throw new Error(errorMessage);
+        }
+    },
+
+    // NEW: Email verification endpoint
+    verifyEmail: async (verificationData) => {
+        try {
+            console.log('🔐 AuthAPI: Starting email verification for:', { ...verificationData, verificationCode: '[HIDDEN]' });
+            const response = await api.post('/auth/verify-email', verificationData);
+            console.log('🔐 AuthAPI: Email verification response:', response.data);
+
+            // Store token if provided after verification
+            if (response.data.token) {
+                localStorage.setItem('authToken', response.data.token);
+            }
+
+            return response.data;
+        } catch (error) {
+            console.error('🔐 AuthAPI: Email verification failed:', error.response?.data || error.message);
+            const errorMessage = error.response?.data?.message ||
+                error.response?.data?.error ||
+                error.message ||
+                'Email verification failed';
+            throw new Error(errorMessage);
+        }
+    },
+
+    // NEW: Resend verification code endpoint
+    resendVerificationCode: async (emailData) => {
+        try {
+            console.log('🔐 AuthAPI: Resending verification code for:', emailData);
+            const response = await api.post('/auth/resend-verification', emailData);
+            console.log('🔐 AuthAPI: Resend verification response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('🔐 AuthAPI: Resend verification failed:', error.response?.data || error.message);
+            const errorMessage = error.response?.data?.message ||
+                error.response?.data?.error ||
+                error.message ||
+                'Failed to resend verification code';
+            throw new Error(errorMessage);
+        }
+    },
+
+    getCurrentUser: async () => {
+        try {
+            const response = await api.get('/auth/me');
+            console.log('🔐 AuthAPI: Current user retrieved:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('🔐 AuthAPI: Get current user failed:', error.response?.data || error.message);
+            const errorMessage = error.response?.data?.message ||
+                error.response?.data?.error ||
+                error.message ||
+                'Failed to get current user';
+            throw new Error(errorMessage);
+        }
+    },
+
+    updateProfile: async (userData) => {
+        try {
+            console.log('🔐 AuthAPI: Updating profile:', userData);
+            const response = await api.put('/auth/profile', userData);
+            console.log('🔐 AuthAPI: Profile updated:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('🔐 AuthAPI: Profile update failed:', error.response?.data || error.message);
+            const errorMessage = error.response?.data?.message ||
+                error.response?.data?.error ||
+                error.message ||
+                'Profile update failed';
+            throw new Error(errorMessage);
+        }
+    },
+
+    refreshToken: async () => {
+        try {
+            const response = await api.post('/auth/refresh');
+            console.log('🔐 AuthAPI: Token refreshed successfully');
+
+            if (response.data.token) {
+                localStorage.setItem('authToken', response.data.token);
+            }
+
+            return response.data;
+        } catch (error) {
+            console.error('🔐 AuthAPI: Token refresh failed:', error.response?.data || error.message);
+            const errorMessage = error.response?.data?.message ||
+                error.response?.data?.error ||
+                error.message ||
+                'Token refresh failed';
+            throw new Error(errorMessage);
+        }
+    },
+
+    logout: async () => {
+        try {
+            // Call logout endpoint if available
+            await api.post('/auth/logout');
+        } catch (error) {
+            console.error('🔐 AuthAPI: Logout endpoint failed:', error.message);
+            // Continue with client-side logout even if server logout fails
+        } finally {
+            // Always clear client-side data
+            localStorage.removeItem('authToken');
+            apiCache.clear();
+        }
+    },
+
+    // Utility function to check if user is authenticated
+    isAuthenticated: () => {
+        const token = localStorage.getItem('authToken');
+        return !!token;
+    },
+
+    // Utility function to get current token
+    getToken: () => {
+        return localStorage.getItem('authToken');
     }
 };
 
@@ -372,44 +568,6 @@ export const movieApi = {
     }
 };
 
-// Auth API functions (unchanged)
-export const authApi = {
-    register: async (userData) => {
-        try {
-            const response = await api.post('/auth/register', userData);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Registration failed');
-        }
-    },
-
-    login: async (credentials) => {
-        try {
-            const response = await api.post('/auth/login', credentials);
-            if (response.data.token) {
-                localStorage.setItem('authToken', response.data.token);
-            }
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Login failed');
-        }
-    },
-
-    getCurrentUser: async () => {
-        try {
-            const response = await api.get('/auth/me');
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to get current user');
-        }
-    },
-
-    logout: () => {
-        localStorage.removeItem('authToken');
-        apiCache.clear(); // Clear cache on logout
-        window.location.href = '/login';
-    }
-};
 
 // User API functions (unchanged, but can be enhanced similarly if needed)
 export const userApi = {
