@@ -282,7 +282,7 @@ export const authApi = {
     resendVerificationCode: async (emailData) => {
         try {
             console.log('🔐 AuthAPI: Resending verification code for:', emailData);
-            const response = await api.post('/auth/resend-verification', emailData);
+            const response = await api.post('/auth/resend-verification-code', emailData);
             console.log('🔐 AuthAPI: Resend verification response:', response.data);
             return response.data;
         } catch (error) {

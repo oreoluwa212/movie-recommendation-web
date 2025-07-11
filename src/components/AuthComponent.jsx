@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import {
   Eye,
   EyeOff,
@@ -29,7 +30,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
-  const [success, setSuccess] = useState("");
 
   const {
     login,
@@ -56,15 +56,27 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
       });
       setErrors({});
       setVerificationSent(false);
-      setSuccess("");
       setAuthMode(initialMode);
     }
   }, [isOpen, initialMode]);
 
   useEffect(() => {
     setErrors({});
-    setSuccess("");
   }, [authMode]);
+
+  // Handle auth errors with toast
+  useEffect(() => {
+    if (authError && isOpen) {
+      toast.error(authError, {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+    }
+  }, [authError, isOpen]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -147,16 +159,22 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    setSuccess("");
 
     try {
       if (authMode === "login") {
         const result = await login(formData.email, formData.password);
         if (result.success) {
-          setSuccess("Login successful! Welcome back.");
+          toast.success("Welcome back! Login successful.", {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
           setTimeout(() => {
             onClose();
-          }, 1500);
+          }, 1000);
         }
       } else if (authMode === "register") {
         const result = await register(
@@ -167,8 +185,16 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
         if (result.success) {
           // Check if email verification is required
           if (result.emailVerificationRequired) {
-            setSuccess(
-              "Account created successfully! Redirecting to email verification..."
+            toast.success(
+              "Account created successfully! Redirecting to email verification...",
+              {
+                position: "top-right",
+                autoClose: 3000,
+                hideProgressBar: false,
+                closeOnClick: true,
+                pauseOnHover: true,
+                draggable: true,
+              }
             );
             setTimeout(() => {
               onClose();
@@ -183,27 +209,57 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
             }, 1500);
           } else {
             // If no verification required, just show success and close
-            setSuccess("Account created successfully! Welcome!");
+            toast.success("Account created successfully! Welcome!", {
+              position: "top-right",
+              autoClose: 3000,
+              hideProgressBar: false,
+              closeOnClick: true,
+              pauseOnHover: true,
+              draggable: true,
+            });
             setTimeout(() => {
               onClose();
-            }, 1500);
+            }, 1000);
           }
         }
       } else if (authMode === "verify") {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         if (formData.verificationCode === "123456") {
-          setSuccess("Email verified successfully!");
+          toast.success("Email verified successfully!", {
+            position: "top-right",
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
           setTimeout(() => {
             onClose();
-          }, 1500);
+          }, 1000);
         } else {
           setErrors({
             verificationCode: "Invalid verification code. Try 123456 for demo.",
+          });
+          toast.error("Invalid verification code. Try 123456 for demo.", {
+            position: "top-right",
+            autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
           });
         }
       }
     } catch (error) {
       console.error("Auth error:", error);
+      toast.error("An error occurred. Please try again.", {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -211,12 +267,26 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
 
   const resendVerificationCode = async () => {
     setVerificationSent(true);
+    toast.success("Verification code sent to your email!", {
+      position: "top-right",
+      autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+    });
     setTimeout(() => setVerificationSent(false), 3000);
   };
 
   const handleSocialLogin = (provider) => {
-    setSuccess(`${provider} login integration coming soon!`);
-    setTimeout(() => setSuccess(""), 3000);
+    toast.info(`${provider} login integration coming soon!`, {
+      position: "top-right",
+      autoClose: 3000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+    });
   };
 
   useEffect(() => {
@@ -244,7 +314,22 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
       <div className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700 overflow-hidden">
         {/* Header */}
         <div className="relative bg-gradient-to-r from-red-600 to-red-700 p-6">
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Film className="h-6 w-6 text-white" />
+              <div>
+                <h2 className="text-xl font-bold text-white">
+                  {authMode === "login" && "Welcome Back"}
+                  {authMode === "register" && "Join StreamVibe"}
+                  {authMode === "verify" && "Verify Email"}
+                </h2>
+                <p className="text-red-100 text-sm">
+                  {authMode === "login" && "Sign in to your account"}
+                  {authMode === "register" && "Create your account"}
+                  {authMode === "verify" && "Enter verification code"}
+                </p>
+              </div>
+            </div>
             <button
               onClick={onClose}
               className="text-red-100 hover:text-white transition-colors p-1 rounded-full hover:bg-red-600"
@@ -256,31 +341,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {authError && (
-            <div className="p-3 bg-red-500 bg-opacity-10 border border-red-500 border-opacity-30 rounded-lg flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" />
-              <span className="text-red-400 text-sm">{authError}</span>
-            </div>
-          )}
-
-          {/* Success Message */}
-          {success && (
-            <div className="p-3 bg-green-500 bg-opacity-10 border border-green-500 border-opacity-30 rounded-lg flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0" />
-              <span className="text-green-400 text-sm">{success}</span>
-            </div>
-          )}
-
-          {/* Verification Sent Message */}
-          {verificationSent && (
-            <div className="p-3 bg-green-500 bg-opacity-10 border border-green-500 border-opacity-30 rounded-lg flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0" />
-              <span className="text-green-400 text-sm">
-                Verification code sent to your email!
-              </span>
-            </div>
-          )}
-
           <div className="space-y-4">
             {/* Social Login Options */}
             {(authMode === "login" || authMode === "register") && (
@@ -486,9 +546,10 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
                   <button
                     type="button"
                     onClick={resendVerificationCode}
-                    className="text-sm text-red-400 hover:text-red-300 underline transition-colors"
+                    disabled={verificationSent}
+                    className="text-sm text-red-400 hover:text-red-300 underline transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Resend Code
+                    {verificationSent ? "Code Sent!" : "Resend Code"}
                   </button>
                 </div>
               </div>
@@ -499,6 +560,9 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
               <div className="text-center">
                 <button
                   type="button"
+                  onClick={() =>
+                    toast.info("Password reset feature coming soon!")
+                  }
                   className="text-sm text-red-400 hover:text-red-300 underline transition-colors"
                 >
                   Forgot your password?
