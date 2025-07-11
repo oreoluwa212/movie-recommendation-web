@@ -146,6 +146,40 @@ export const useMovieStore = create(
         }
       },
 
+      // Now playing movies
+      getNowPlayingMovies: async (page = 2) => {
+        set({ isLoadingNowPlaying: true, error: null });
+        console.log('Fetching now playing movies...');
+
+        try {
+          const response = await movieApi.getNowPlayingMovies(page);
+          console.log('Now playing movies response:', response);
+
+          let results = [];
+          if (response.results) {
+            results = response.results;
+          } else if (response.movies) {
+            results = response.movies;
+          } else if (Array.isArray(response)) {
+            results = response;
+          } else if (response.data) {
+            results = response.data.results || response.data.movies || response.data;
+          }
+
+          console.log('Now playing movies processed:', results);
+          set({
+            nowPlayingMovies: results,
+            isLoadingNowPlaying: false
+          });
+          return results;
+        } catch (error) {
+          console.error('Now playing movies error:', error);
+          set({ isLoadingNowPlaying: false, error: error.message });
+          toast.error(error.message || 'Failed to fetch now playing movies');
+          throw error;
+        }
+      },
+
       // Top rated movies
       getTopRatedMovies: async (page = 1) => {
         set({ isLoadingTopRated: true, error: null });
@@ -176,40 +210,6 @@ export const useMovieStore = create(
           console.error('Top rated movies error:', error);
           set({ isLoadingTopRated: false, error: error.message });
           toast.error(error.message || 'Failed to fetch top rated movies');
-          throw error;
-        }
-      },
-
-      // Now playing movies
-      getNowPlayingMovies: async (page = 1) => {
-        set({ isLoadingNowPlaying: true, error: null });
-        console.log('Fetching now playing movies...');
-
-        try {
-          const response = await movieApi.getNowPlayingMovies(page);
-          console.log('Now playing movies response:', response);
-
-          let results = [];
-          if (response.results) {
-            results = response.results;
-          } else if (response.movies) {
-            results = response.movies;
-          } else if (Array.isArray(response)) {
-            results = response;
-          } else if (response.data) {
-            results = response.data.results || response.data.movies || response.data;
-          }
-
-          console.log('Now playing movies processed:', results);
-          set({
-            nowPlayingMovies: results,
-            isLoadingNowPlaying: false
-          });
-          return results;
-        } catch (error) {
-          console.error('Now playing movies error:', error);
-          set({ isLoadingNowPlaying: false, error: error.message });
-          toast.error(error.message || 'Failed to fetch now playing movies');
           throw error;
         }
       },

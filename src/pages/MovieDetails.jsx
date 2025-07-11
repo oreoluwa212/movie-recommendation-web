@@ -326,8 +326,6 @@ const MovieDetails = () => {
             {[
               { id: "overview", label: "Details" },
               { id: "cast", label: "Cast & Crew" },
-              { id: "recommendations", label: "Recommendations" },
-              { id: "similar", label: "Similar Movies" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -515,44 +513,6 @@ const MovieDetails = () => {
                 </div>
               )}
             </div>
-          )}
-
-          {activeTab === "recommendations" && (
-            <MovieSection
-              title="Recommended Movies"
-              movies={recommendations}
-              loading={recommendationsLoading}
-              error={
-                recommendationsLoading
-                  ? null
-                  : recommendations.length === 0
-                  ? "No recommendations found"
-                  : null
-              }
-              showViewAll={false}
-              cardSize="medium"
-              onMovieClick={handleMovieClick}
-              onRetry={retryRecommendations}
-            />
-          )}
-
-          {activeTab === "similar" && (
-            <MovieSection
-              title="Similar Movies"
-              movies={similarMovies}
-              loading={similarMoviesLoading}
-              error={
-                similarMoviesLoading
-                  ? null
-                  : similarMovies.length === 0
-                  ? "No similar movies found"
-                  : null
-              }
-              showViewAll={false}
-              cardSize="medium"
-              onMovieClick={handleMovieClick}
-              onRetry={retrySimilarMovies}
-            />
           )}
         </div>
       </div>
