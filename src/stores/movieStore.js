@@ -19,7 +19,7 @@ export const useMovieStore = create(
       searchQuery: '',
       isLoading: false,
       error: null,
-      
+
       // Individual loading states
       isLoadingPopular: false,
       isLoadingTopRated: false,
@@ -48,14 +48,14 @@ export const useMovieStore = create(
           set({ searchResults: [], searchQuery: '' });
           return [];
         }
-        
+
         set({ isLoadingSearch: true, error: null, searchQuery: query });
         console.log('Searching for:', query);
-        
+
         try {
           const response = await movieApi.searchMovies(query, page);
           console.log('Search response:', response);
-          
+
           // Handle different response structures
           let results = [];
           if (response.results) {
@@ -67,7 +67,7 @@ export const useMovieStore = create(
           } else if (response.data) {
             results = response.data.results || response.data.movies || response.data;
           }
-          
+
           console.log('Search results:', results);
           set({
             searchResults: results,
@@ -86,11 +86,11 @@ export const useMovieStore = create(
       getGenres: async () => {
         set({ isLoadingGenres: true, error: null });
         console.log('Fetching genres...');
-        
+
         try {
           const response = await movieApi.getGenres();
           console.log('Genres response:', response);
-          
+
           let genres = [];
           if (response.genres) {
             genres = response.genres;
@@ -99,7 +99,7 @@ export const useMovieStore = create(
           } else if (response.data) {
             genres = response.data.genres || response.data;
           }
-          
+
           console.log('Processed genres:', genres);
           set({ genres, isLoadingGenres: false });
           return genres;
@@ -115,11 +115,11 @@ export const useMovieStore = create(
       getPopularMovies: async (page = 1) => {
         set({ isLoadingPopular: true, error: null });
         console.log('Fetching popular movies...');
-        
+
         try {
           const response = await movieApi.getPopularMovies(page);
           console.log('Popular movies response:', response);
-          
+
           // Handle different response structures
           let results = [];
           if (response.results) {
@@ -131,7 +131,7 @@ export const useMovieStore = create(
           } else if (response.data) {
             results = response.data.results || response.data.movies || response.data;
           }
-          
+
           console.log('Popular movies processed:', results);
           set({
             popularMovies: results,
@@ -150,11 +150,11 @@ export const useMovieStore = create(
       getTopRatedMovies: async (page = 1) => {
         set({ isLoadingTopRated: true, error: null });
         console.log('Fetching top rated movies...');
-        
+
         try {
           const response = await movieApi.getTopRatedMovies(page);
           console.log('Top rated movies response:', response);
-          
+
           let results = [];
           if (response.results) {
             results = response.results;
@@ -165,7 +165,7 @@ export const useMovieStore = create(
           } else if (response.data) {
             results = response.data.results || response.data.movies || response.data;
           }
-          
+
           console.log('Top rated movies processed:', results);
           set({
             topRatedMovies: results,
@@ -184,11 +184,11 @@ export const useMovieStore = create(
       getNowPlayingMovies: async (page = 1) => {
         set({ isLoadingNowPlaying: true, error: null });
         console.log('Fetching now playing movies...');
-        
+
         try {
           const response = await movieApi.getNowPlayingMovies(page);
           console.log('Now playing movies response:', response);
-          
+
           let results = [];
           if (response.results) {
             results = response.results;
@@ -199,7 +199,7 @@ export const useMovieStore = create(
           } else if (response.data) {
             results = response.data.results || response.data.movies || response.data;
           }
-          
+
           console.log('Now playing movies processed:', results);
           set({
             nowPlayingMovies: results,
@@ -218,11 +218,11 @@ export const useMovieStore = create(
       getUpcomingMovies: async (page = 1) => {
         set({ isLoadingUpcoming: true, error: null });
         console.log('Fetching upcoming movies...');
-        
+
         try {
           const response = await movieApi.getUpcomingMovies(page);
           console.log('Upcoming movies response:', response);
-          
+
           let results = [];
           if (response.results) {
             results = response.results;
@@ -233,7 +233,7 @@ export const useMovieStore = create(
           } else if (response.data) {
             results = response.data.results || response.data.movies || response.data;
           }
-          
+
           console.log('Upcoming movies processed:', results);
           set({
             upcomingMovies: results,
@@ -253,13 +253,13 @@ export const useMovieStore = create(
         try {
           console.log('Initializing featured movies...');
           const { popularMovies } = get();
-          
+
           if (popularMovies && popularMovies.length > 0) {
             console.log('Using existing popular movies for featured');
             set({ featuredMovies: popularMovies.slice(0, 5) });
             return;
           }
-          
+
           console.log('Fetching popular movies for featured');
           const movies = await get().getPopularMovies();
           if (movies && movies.length > 0) {
@@ -277,10 +277,10 @@ export const useMovieStore = create(
         try {
           console.log('🎬 Initializing app data...');
           set({ isLoading: true });
-          
+
           // First get genres
           await get().getGenres();
-          
+
           // Then get all movie categories in parallel
           const promises = [
             get().getPopularMovies(),
@@ -290,13 +290,13 @@ export const useMovieStore = create(
           ];
 
           await Promise.all(promises);
-          
+
           // Initialize featured movies after popular movies are loaded
           await get().initializeFeaturedMovies();
-          
+
           set({ isLoading: false });
           console.log('✅ App data initialized successfully');
-          
+
           // Log current state for debugging
           const state = get();
           console.log('Current state:', {
@@ -307,7 +307,7 @@ export const useMovieStore = create(
             featuredMovies: state.featuredMovies.length,
             genres: state.genres.length
           });
-          
+
         } catch (error) {
           console.error('❌ Failed to initialize app data:', error);
           set({ error: error.message, isLoading: false });
@@ -319,26 +319,26 @@ export const useMovieStore = create(
       clearSearchResults: () => {
         set({ searchResults: [], searchQuery: '' });
       },
-      
+
       setCurrentMovie: (movie) => {
         set({ currentMovie: movie });
       },
-      
+
       clearCurrentMovie: () => {
         set({ currentMovie: null });
       },
 
       // Get movie by ID from all available sources
       getMovieById: (id) => {
-        const { 
-          movies, 
-          popularMovies, 
-          topRatedMovies, 
-          nowPlayingMovies, 
-          upcomingMovies, 
-          searchResults 
+        const {
+          movies,
+          popularMovies,
+          topRatedMovies,
+          nowPlayingMovies,
+          upcomingMovies,
+          searchResults
         } = get();
-        
+
         const allMovies = [
           ...movies,
           ...popularMovies,
@@ -347,14 +347,14 @@ export const useMovieStore = create(
           ...upcomingMovies,
           ...searchResults
         ];
-        
+
         return allMovies.find(m => m.id === parseInt(id));
       },
 
       // Image URL formatters
       formatPosterUrl: (path, size = 'w500') =>
         path ? `https://image.tmdb.org/t/p/${size}${path}` : '/placeholder-movie.jpg',
-      
+
       formatBackdropUrl: (path, size = 'w1280') =>
         path ? `https://image.tmdb.org/t/p/${size}${path}` : '/placeholder-backdrop.jpg',
 
@@ -362,7 +362,7 @@ export const useMovieStore = create(
       getGenreNames: (genreIds) => {
         const { genres } = get();
         if (!genreIds || !Array.isArray(genreIds)) return [];
-        
+
         return genreIds
           .map(id => genres.find(g => g.id === id)?.name)
           .filter(Boolean);
@@ -416,3 +416,48 @@ export const useMovieStore = create(
     }
   )
 );
+
+export const useMovieStoreWithFilters = () => {
+  const store = useMovieStore();
+
+  const filterMovies = async (filters) => {
+    store.setLoading(true);
+    store.setError(null);
+
+    try {
+      const params = new URLSearchParams();
+
+      // Build query parameters
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== '' && value !== null && value !== undefined) {
+          if (Array.isArray(value) && value.length > 0) {
+            params.append(key, value.join(','));
+          } else if (!Array.isArray(value)) {
+            params.append(key, value);
+          }
+        }
+      });
+
+      const response = await movieApi.filterMovies(params.toString());
+
+      return {
+        movies: response.data.results || [],
+        pagination: {
+          page: response.data.page || 1,
+          totalPages: response.data.totalPages || 1,
+          totalResults: response.data.totalResults || 0
+        }
+      };
+    } catch (error) {
+      store.setError(error.message);
+      throw error;
+    } finally {
+      store.setLoading(false);
+    }
+  };
+
+  return {
+    ...store,
+    filterMovies
+  };
+};

@@ -89,6 +89,7 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+        console.log('Making API request:', config.method?.toUpperCase(), config.url);
         return config;
     },
     (error) => Promise.reject(error)
@@ -96,8 +97,13 @@ api.interceptors.request.use(
 
 // Enhanced response interceptor with retry logic
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        console.log('API response received:', response.config.url, response.status);
+        return response;
+    },
     async (error) => {
+        console.error('API error:', error.config?.url, error.response?.status, error.message);
+
         const originalRequest = error.config;
 
         // Handle 429 errors with exponential backoff
@@ -167,45 +173,6 @@ const makeRequest = async (requestFn, cacheKey = null, useQueue = false) => {
         if (cacheKey) {
             ongoingRequests.delete(cacheKey);
         }
-    }
-};
-
-// Auth API functions (unchanged)
-export const authApi = {
-    register: async (userData) => {
-        try {
-            const response = await api.post('/auth/register', userData);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Registration failed');
-        }
-    },
-
-    login: async (credentials) => {
-        try {
-            const response = await api.post('/auth/login', credentials);
-            if (response.data.token) {
-                localStorage.setItem('authToken', response.data.token);
-            }
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Login failed');
-        }
-    },
-
-    getCurrentUser: async () => {
-        try {
-            const response = await api.get('/auth/me');
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to get current user');
-        }
-    },
-
-    logout: () => {
-        localStorage.removeItem('authToken');
-        apiCache.clear(); // Clear cache on logout
-        window.location.href = '/login';
     }
 };
 
@@ -341,6 +308,106 @@ export const movieApi = {
             cacheKey,
             true
         );
+    },
+
+    // FIXED: Filter movies with proper axios usage
+    filterMovies: async (queryParams) => {
+        const url = `/movies/filter${queryParams ? `?${queryParams}` : ''}`;
+        console.log('Filtering movies with URL:', url);
+
+        try {
+            const response = await api.get(url);
+            console.log('Filter response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Filter movies error:', error);
+            throw error;
+        }
+    },
+
+    // Helper method to build filter query string
+    buildFilterQuery: (filters) => {
+        const params = new URLSearchParams();
+
+        // Add each filter parameter if it has a value
+        if (filters.page) params.append('page', filters.page);
+        if (filters.minRating) params.append('minRating', filters.minRating);
+        if (filters.maxRating) params.append('maxRating', filters.maxRating);
+        if (filters.releaseYear) params.append('releaseYear', filters.releaseYear);
+        if (filters.genres && filters.genres.length > 0) {
+            params.append('genres', filters.genres.join(','));
+        }
+        if (filters.sortBy) params.append('sortBy', filters.sortBy);
+        if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
+
+        return params.toString();
+    },
+
+    // Specific filter methods for different use cases
+    filterByRating: async (minRating, maxRating, page = 1) => {
+        const query = movieApi.buildFilterQuery({ minRating, maxRating, page });
+        return movieApi.filterMovies(query);
+    },
+
+    filterByYear: async (releaseYear, page = 1) => {
+        const query = movieApi.buildFilterQuery({ releaseYear, page });
+        return movieApi.filterMovies(query);
+    },
+
+    filterByGenre: async (genreIds, page = 1) => {
+        const genres = Array.isArray(genreIds) ? genreIds : [genreIds];
+        const query = movieApi.buildFilterQuery({ genres, page });
+        return movieApi.filterMovies(query);
+    },
+
+    sortMovies: async (sortBy, sortOrder = 'desc', page = 1) => {
+        const query = movieApi.buildFilterQuery({ sortBy, sortOrder, page });
+        return movieApi.filterMovies(query);
+    },
+
+    // Combined filter method
+    filterMoviesAdvanced: async (filters) => {
+        const query = movieApi.buildFilterQuery(filters);
+        return movieApi.filterMovies(query);
+    }
+};
+
+// Auth API functions (unchanged)
+export const authApi = {
+    register: async (userData) => {
+        try {
+            const response = await api.post('/auth/register', userData);
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || 'Registration failed');
+        }
+    },
+
+    login: async (credentials) => {
+        try {
+            const response = await api.post('/auth/login', credentials);
+            if (response.data.token) {
+                localStorage.setItem('authToken', response.data.token);
+            }
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || 'Login failed');
+        }
+    },
+
+    getCurrentUser: async () => {
+        try {
+            const response = await api.get('/auth/me');
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || 'Failed to get current user');
+        }
+    },
+
+    logout: () => {
+        localStorage.removeItem('authToken');
+        apiCache.clear(); // Clear cache on logout
+        window.location.href = '/login';
     }
 };
 
@@ -404,6 +471,24 @@ export const userApi = {
             },
             cacheKey
         );
+    }
+};
+
+// Utility functions for cache management
+export const cacheUtils = {
+    clearCache: () => {
+        apiCache.clear();
+        console.log('API cache cleared');
+    },
+
+    clearCacheByPattern: (pattern) => {
+        const keys = Array.from(apiCache.cache.keys());
+        keys.forEach(key => {
+            if (key.includes(pattern)) {
+                apiCache.cache.delete(key);
+            }
+        });
+        console.log(`Cache cleared for pattern: ${pattern}`);
     }
 };
 
@@ -550,24 +635,6 @@ export const watchlistsApi = {
             },
             cacheKey
         );
-    }
-};
-
-// Utility functions for cache management
-export const cacheUtils = {
-    clearCache: () => {
-        apiCache.clear();
-        console.log('API cache cleared');
-    },
-
-    clearCacheByPattern: (pattern) => {
-        const keys = Array.from(apiCache.cache.keys());
-        keys.forEach(key => {
-            if (key.includes(pattern)) {
-                apiCache.cache.delete(key);
-            }
-        });
-        console.log(`Cache cleared for pattern: ${pattern}`);
     }
 };
 
