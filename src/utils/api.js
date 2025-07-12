@@ -628,7 +628,18 @@ export const userApi = {
             },
             cacheKey
         );
-    }
+    },
+
+    removeFromWatched: async (movieId) => {
+        try {
+            const response = await api.delete(`/users/watched/${movieId}`);
+            // Clear watched cache when removing
+            apiCache.cache.delete('user-watched');
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || 'Failed to remove from watched');
+        }
+    },
 };
 
 // Reviews API functions (unchanged)
