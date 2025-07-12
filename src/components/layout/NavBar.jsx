@@ -83,11 +83,11 @@ const Navbar = () => {
     { path: "/search", label: "Search", icon: Search },
   ];
 
+  // Fixed user links to match UserPage routes
   const userLinks = [
     { path: "/favorites", label: "Favorites", icon: Heart },
     { path: "/watched", label: "Watched", icon: Eye },
-    { path: "/watchlists", label: "Watchlists", icon: BookOpen },
-    { path: "/reviews", label: "Reviews", icon: Star },
+    { path: "/watchlist", label: "Watchlist", icon: BookOpen }, // Fixed: singular, not plural
   ];
 
   return (

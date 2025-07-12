@@ -1,4 +1,4 @@
-// App.js - Improved version
+// App.js - Updated version with all user routes
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -10,6 +10,7 @@ import MovieDetails from "./pages/MovieDetails";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import VerifyEmail from "./pages/auth/VerifyEmail";
+import UserPage from "./pages/UserPage";
 import Navbar from "./components/layout/NavBar";
 
 function App() {
@@ -32,6 +33,15 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
+
+            {/* User Routes - All routes that should use UserPage */}
+            <Route path="/favorites" element={<UserPage />} />
+            <Route path="/watchlist" element={<UserPage />} />
+            <Route path="/watched" element={<UserPage />} />
+            <Route path="/profile" element={<UserPage />} />
+            
+            {/* Alternative user routes with section parameter */}
+            <Route path="/user/:section" element={<UserPage />} />
 
             {/* Movie Listing Routes */}
             <Route path="/popular" element={<MovieListingPage />} />
