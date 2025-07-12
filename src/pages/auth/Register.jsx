@@ -23,7 +23,7 @@ import { validateForm } from "../../utils/validation";
 
 const Register = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { register, isLoading, error: authError, isAuthenticated } = useAuthStore();
+  const { register, isLoading, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
 
   const {
@@ -45,13 +45,6 @@ const Register = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Handle auth errors with toast
-  useEffect(() => {
-    if (authError) {
-      toast.error(authError);
-    }
-  }, [authError]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -71,9 +64,6 @@ const Register = () => {
         formData.password
       );
       if (result.success) {
-        toast.success(
-          "Account created successfully! Redirecting to verify email..."
-        );
         setTimeout(() => {
           navigate(`/verify-email?email=${encodeURIComponent(formData.email)}`);
         }, 1500);

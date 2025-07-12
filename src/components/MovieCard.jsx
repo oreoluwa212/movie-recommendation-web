@@ -93,7 +93,6 @@ const MovieCard = ({
         toast.success(`${movie.title} removed from favorites`);
       } else {
         await addToFavorites(movie);
-        toast.success(`${movie.title} added to favorites`);
       }
     } catch (error) {
       toast.error('Failed to update favorites');
@@ -129,7 +128,6 @@ const MovieCard = ({
         toast.success(`${movie.title} removed from watched`);
       } else {
         await addToWatched(movie);
-        toast.success(`${movie.title} marked as watched`);
       }
     } catch (error) {
       toast.error('Failed to update watched status');

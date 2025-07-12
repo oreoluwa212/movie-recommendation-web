@@ -24,7 +24,7 @@ import { validateForm } from "../../utils/validation";
 
 const Login = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login, isLoading, error: authError, isAuthenticated } = useAuthStore();
+  const { login, isLoading, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
 
   const {
@@ -44,22 +44,7 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Handle auth errors with toast
-  useEffect(() => {
-    if (authError) {
-      toast.error(authError, {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
-    }
-  }, [authError]);
-
-  
-  const handleSubmit = async (e) => {
+    const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Validate form
@@ -74,14 +59,6 @@ const Login = () => {
     try {
       const result = await login(formData.email, formData.password);
       if (result.success) {
-        toast.success("Welcome back! Login successful.", {
-          position: "top-right",
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-        });
         setTimeout(() => {
           navigate("/");
         }, 1000);

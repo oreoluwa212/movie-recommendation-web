@@ -45,7 +45,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
     login,
     register,
     isLoading,
-    error: authError,
     isAuthenticated,
   } = useAuthStore();
 
@@ -67,19 +66,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
     setErrors({});
   }, [authMode, setErrors]);
 
-  // Handle auth errors with toast
-  useEffect(() => {
-    if (authError && isOpen) {
-      toast.error(authError, {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
-    }
-  }, [authError, isOpen]);
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter") {
@@ -117,14 +103,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
       if (authMode === "login") {
         const result = await login(formData.email, formData.password);
         if (result.success) {
-          toast.success("Welcome back! Login successful.", {
-            position: "top-right",
-            autoClose: 3000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-          });
           setTimeout(() => {
             onClose();
           }, 1000);
@@ -161,15 +139,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
               });
             }, 1500);
           } else {
-            // If no verification required, just show success and close
-            toast.success("Account created successfully! Welcome!", {
-              position: "top-right",
-              autoClose: 3000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-            });
             setTimeout(() => {
               onClose();
             }, 1000);
@@ -191,9 +160,9 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
           }, 1000);
         } else {
           setErrors({
-            verificationCode: "Invalid verification code. Try 123456 for demo.",
+            verificationCode: "Invalid verification code. Please try again.",
           });
-          toast.error("Invalid verification code. Try 123456 for demo.", {
+          toast.error("Invalid verification code.", {
             position: "top-right",
             autoClose: 5000,
             hideProgressBar: false,

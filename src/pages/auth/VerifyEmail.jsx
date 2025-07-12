@@ -23,13 +23,8 @@ const VerifyEmail = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [isVerified, setIsVerified] = useState(false);
 
-  const {
-    user,
-    isAuthenticated,
-    error: authError,
-    verifyEmail,
-    resendVerificationCode,
-  } = useAuthStore();
+  const { user, isAuthenticated, verifyEmail, resendVerificationCode } =
+    useAuthStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const email = searchParams.get("email") || user?.email || "";
@@ -93,7 +88,6 @@ const VerifyEmail = () => {
       const result = await verifyEmail(email, verificationCode);
 
       if (result.success) {
-        setSuccess("Email verified successfully! Redirecting to login...");
         setIsVerified(true);
 
         // Redirect to login page after successful verification
@@ -234,16 +228,6 @@ const VerifyEmail = () => {
                 <p className="text-gray-300 text-sm">
                   You can now login to your StreamVibe account.
                 </p>
-              </div>
-            )}
-
-            {/* Error Message */}
-            {(authError || errors.verificationCode) && (
-              <div className="p-3 bg-red-500 bg-opacity-10 border border-red-500 border-opacity-30 rounded-lg flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" />
-                <span className="text-red-400 text-sm">
-                  {authError || errors.verificationCode}
-                </span>
               </div>
             )}
 
