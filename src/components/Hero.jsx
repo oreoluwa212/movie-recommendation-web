@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Star, Calendar, Film, Play, Info } from "lucide-react";
-// import Button from "../ui/Button";
 import AuthButtons from "./AuthButtons";
 import { useAuthStore } from "../stores/authStore";
 import Button from "./ui/Button";
