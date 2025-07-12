@@ -34,7 +34,7 @@ apiClient.interceptors.response.use(
             // Clear invalid tokens
             localStorage.removeItem('authToken');
             sessionStorage.removeItem('authToken');
-            toast.error('Session expired. Please login again.');
+            // Don't show toast here - let individual operations handle it
         }
         return Promise.reject(error);
     }
@@ -53,12 +53,12 @@ class RequestCache {
 
     set(key, promise) {
         this.cache.set(key, promise);
-        
+
         // Auto-cleanup after 30 seconds to prevent memory leaks
         const timeout = setTimeout(() => {
             this.delete(key);
         }, 30000);
-        
+
         this.timeouts.set(key, timeout);
     }
 
@@ -89,6 +89,106 @@ const isAuthenticated = () => {
     return !!(localStorage.getItem('authToken') || sessionStorage.getItem('authToken'));
 };
 
+// IMPROVED: User-friendly error message helper
+const getUserFriendlyError = (error, operation = 'perform this action') => {
+    // Check if it's an authentication error
+    if (error.response?.status === 401 ||
+        error.message?.toLowerCase().includes('auth') ||
+        error.message?.toLowerCase().includes('token') ||
+        error.message?.toLowerCase().includes('unauthorized')) {
+        return `Please sign in to ${operation}`;
+    }
+
+    // Check for network errors
+    if (error.code === 'NETWORK_ERROR' || !error.response) {
+        return 'Connection error. Please check your internet and try again';
+    }
+
+    // Check for server errors
+    if (error.response?.status >= 500) {
+        return 'Server error. Please try again later';
+    }
+
+    // Check for specific error messages from backend
+    if (error.response?.data?.message) {
+        const backendMessage = error.response.data.message.toLowerCase();
+
+        // Transform common backend messages to user-friendly ones
+        if (backendMessage.includes('duplicate') || backendMessage.includes('already exists')) {
+            return 'This item already exists';
+        }
+
+        if (backendMessage.includes('not found')) {
+            return 'Item not found';
+        }
+
+        if (backendMessage.includes('validation')) {
+            return 'Please check your input and try again';
+        }
+
+        // Return the backend message if it's already user-friendly
+        return error.response.data.message;
+    }
+
+    // Default fallback
+    return `Failed to ${operation}. Please try again`;
+};
+
+// IMPROVED: Toast management to prevent duplicates
+class ToastManager {
+    constructor() {
+        this.activeToasts = new Set();
+        this.toastTimeout = 100; // Prevent duplicate toasts within 100ms
+    }
+
+    show(type, message, options = {}) {
+        const key = `${type}-${message}`;
+
+        if (this.activeToasts.has(key)) {
+            return;
+        }
+
+        this.activeToasts.add(key);
+
+        // Remove from active toasts after a short delay
+        setTimeout(() => {
+            this.activeToasts.delete(key);
+        }, this.toastTimeout);
+
+        // Show the toast
+        switch (type) {
+            case 'success':
+                return toast.success(message, options);
+            case 'error':
+                return toast.error(message, options);
+            case 'info':
+                return toast.info(message, options);
+            case 'warning':
+                return toast.warning(message, options);
+            default:
+                return toast(message, options);
+        }
+    }
+
+    success(message, options = {}) {
+        return this.show('success', message, options);
+    }
+
+    error(message, options = {}) {
+        return this.show('error', message, options);
+    }
+
+    info(message, options = {}) {
+        return this.show('info', message, options);
+    }
+
+    warning(message, options = {}) {
+        return this.show('warning', message, options);
+    }
+}
+
+const toastManager = new ToastManager();
+
 export const useUserStore = create(
     persist(
         (set, get) => ({
@@ -104,7 +204,7 @@ export const useUserStore = create(
             lastSync: null,
             isMinimalProfileLoaded: false,
             isMinimalProfileLoading: false,
-            
+
             // NEW: Add initialization state
             isInitialized: false,
             initializationError: null,
@@ -146,9 +246,9 @@ export const useUserStore = create(
 
                 const initPromise = (async () => {
                     try {
-                        set({ 
-                            isMinimalProfileLoading: true, 
-                            isLoading: true, 
+                        set({
+                            isMinimalProfileLoading: true,
+                            isLoading: true,
                             error: null,
                             initializationError: null
                         });
@@ -175,8 +275,8 @@ export const useUserStore = create(
                         }
                     } catch (error) {
                         console.error('❌ User store initialization failed:', error);
-                        const errorMessage = error.response?.data?.message || error.message || 'Failed to initialize';
-                        
+                        const errorMessage = getUserFriendlyError(error, 'initialize your profile');
+
                         set({
                             error: errorMessage,
                             initializationError: errorMessage,
@@ -217,7 +317,7 @@ export const useUserStore = create(
 
                 // Force refresh logic
                 const cacheKey = 'loadMinimalProfile';
-                
+
                 if (requestCache.has(cacheKey)) {
                     return await requestCache.get(cacheKey);
                 }
@@ -242,7 +342,7 @@ export const useUserStore = create(
                             throw new Error(response.data.message || 'Invalid response from server');
                         }
                     } catch (error) {
-                        const errorMessage = error.response?.data?.message || error.message || 'Failed to load minimal profile';
+                        const errorMessage = getUserFriendlyError(error, 'load your profile');
                         set({
                             error: errorMessage,
                             isMinimalProfileLoading: false,
@@ -332,7 +432,7 @@ export const useUserStore = create(
                             throw new Error(response.data.message || 'Invalid response from server');
                         }
                     } catch (error) {
-                        const errorMessage = error.response?.data?.message || error.message || 'Failed to load profile';
+                        const errorMessage = getUserFriendlyError(error, 'load your profile');
                         set({ isLoading: false, error: errorMessage });
                         console.error('Load profile failed:', errorMessage);
                         throw error;
@@ -397,7 +497,7 @@ export const useUserStore = create(
                             profile: currentState.profile
                         };
                     } catch (error) {
-                        const errorMessage = error.response?.data?.message || error.message || 'Failed to sync with server';
+                        const errorMessage = getUserFriendlyError(error, 'sync your data');
                         set({ isLoading: false, error: errorMessage });
                         console.error('Sync failed:', errorMessage);
                         throw error;
@@ -439,7 +539,7 @@ export const useUserStore = create(
                     initializationError: null
                 });
                 requestCache.clear();
-                toast.info('All data cleared');
+                toastManager.info('All data cleared');
             },
 
             reset: () => {
@@ -507,13 +607,19 @@ export const useUserStore = create(
                 };
             },
 
-            // Favorites management
+            // IMPROVED: Favorites management with better error handling
             addToFavorites: async (movieData) => {
+                // Check authentication first
+                if (!isAuthenticated()) {
+                    toastManager.error('Please sign in to add movies to your favorites');
+                    return { success: false, error: 'Not authenticated' };
+                }
+
                 const currentFavorites = get().favorites;
                 const isAlreadyFavorite = currentFavorites.some(fav => fav.movieId === movieData.id);
 
                 if (isAlreadyFavorite) {
-                    toast.info('Movie is already in your favorites!');
+                    toastManager.info('Movie is already in your favorites!');
                     return { success: false, error: 'Already in favorites' };
                 }
 
@@ -550,27 +656,35 @@ export const useUserStore = create(
                     await userApi.addFavorite(favoriteMovie);
 
                     set({ isLoading: false });
-                    toast.success(`Added "${movieData.title}" to favorites!`);
+                    toastManager.success(`Added "${movieData.title}" to favorites!`);
                     return { success: true, data: favoriteMovie };
                 } catch (error) {
                     // Rollback on error
                     set({
                         favorites: currentFavorites,
                         isLoading: false,
-                        error: error.message || 'Failed to add to favorites'
+                        error: getUserFriendlyError(error, 'add to favorites')
                     });
-                    toast.error(error.message || 'Failed to add to favorites');
+
+                    const errorMessage = getUserFriendlyError(error, 'add to favorites');
+                    toastManager.error(errorMessage);
                     console.error('Add to favorites failed:', error);
-                    return { success: false, error: error.message || 'Failed to add to favorites' };
+                    return { success: false, error: errorMessage };
                 }
             },
 
             removeFromFavorites: async (movieId) => {
+                // Check authentication first
+                if (!isAuthenticated()) {
+                    toastManager.error('Please sign in to remove movies from your favorites');
+                    return { success: false, error: 'Not authenticated' };
+                }
+
                 const currentFavorites = get().favorites;
                 const movieToRemove = currentFavorites.find(fav => fav.movieId === movieId);
 
                 if (!movieToRemove) {
-                    toast.info('Movie not found in favorites');
+                    toastManager.info('Movie not found in favorites');
                     return { success: false, error: 'Movie not in favorites' };
                 }
 
@@ -599,28 +713,36 @@ export const useUserStore = create(
                     await userApi.removeFavorite(movieId);
 
                     set({ isLoading: false });
-                    toast.success(`Removed "${movieToRemove.title}" from favorites!`);
+                    toastManager.success(`Removed "${movieToRemove.title}" from favorites!`);
                     return { success: true };
                 } catch (error) {
                     // Rollback on error
                     set({
                         favorites: currentFavorites,
                         isLoading: false,
-                        error: error.message || 'Failed to remove from favorites'
+                        error: getUserFriendlyError(error, 'remove from favorites')
                     });
-                    toast.error(error.message || 'Failed to remove from favorites');
+
+                    const errorMessage = getUserFriendlyError(error, 'remove from favorites');
+                    toastManager.error(errorMessage);
                     console.error('Remove from favorites failed:', error);
-                    return { success: false, error: error.message || 'Failed to remove from favorites' };
+                    return { success: false, error: errorMessage };
                 }
             },
 
-            // Watched movies management
+            // IMPROVED: Watched movies management with better error handling
             addToWatched: async (movieData, userRating = null) => {
+                // Check authentication first
+                if (!isAuthenticated()) {
+                    toastManager.error('Please sign in to add movies to your watched list');
+                    return { success: false, error: 'Not authenticated' };
+                }
+
                 const currentWatched = get().watchedMovies;
                 const isAlreadyWatched = currentWatched.some(watched => watched.movieId === movieData.id);
 
                 if (isAlreadyWatched) {
-                    toast.info('Movie is already in your watched list!');
+                    toastManager.info('Movie is already in your watched list!');
                     return { success: false, error: 'Already watched' };
                 }
 
@@ -664,18 +786,83 @@ export const useUserStore = create(
                     await userApi.addToWatched(watchedMovie);
 
                     set({ isLoading: false });
-                    toast.success(`Added "${movieData.title}" to watched list!`);
+                    toastManager.success(`Added "${movieData.title}" to watched list!`);
                     return { success: true, data: watchedMovie };
                 } catch (error) {
                     // Rollback on error
                     set({
                         watchedMovies: currentWatched,
                         isLoading: false,
-                        error: error.message || 'Failed to add to watched list'
+                        error: getUserFriendlyError(error, 'add to watched list')
                     });
-                    toast.error(error.message || 'Failed to add to watched list');
+
+                    const errorMessage = getUserFriendlyError(error, 'add to watched list');
+                    toastManager.error(errorMessage);
                     console.error('Add to watched failed:', error);
-                    return { success: false, error: error.message || 'Failed to add to watched list' };
+                    return { success: false, error: errorMessage };
+                }
+            },
+
+            removeFromWatched: async (movieId) => {
+                // Check authentication first
+                if (!isAuthenticated()) {
+                    toastManager.error('Please sign in to remove movies from your watched list');
+                    return { success: false, error: 'Not authenticated' };
+                }
+
+                const currentWatched = get().watchedMovies;
+                const movieToRemove = currentWatched.find(watched => watched.movieId === movieId);
+
+                if (!movieToRemove) {
+                    toastManager.info('Movie not found in watched list');
+                    return { success: false, error: 'Movie not in watched list' };
+                }
+
+                set({ isLoading: true, error: null });
+
+                try {
+                    // First update local state
+                    const updatedWatched = currentWatched.filter(watched => watched.movieId !== movieId);
+                    set({ watchedMovies: updatedWatched });
+
+                    // Update profile stats
+                    const currentProfile = get().profile;
+                    if (currentProfile) {
+                        const ratedMovies = updatedWatched.filter(movie => movie.rating);
+                        const averageRating = ratedMovies.length > 0
+                            ? (ratedMovies.reduce((sum, movie) => sum + movie.rating, 0) / ratedMovies.length).toFixed(1)
+                            : "0";
+
+                        set({
+                            profile: {
+                                ...currentProfile,
+                                stats: {
+                                    ...currentProfile.stats,
+                                    totalWatched: updatedWatched.length,
+                                    averageRating
+                                }
+                            }
+                        });
+                    }
+
+                    // Then sync with server
+                    await userApi.removeFromWatched(movieId);
+
+                    set({ isLoading: false });
+                    toastManager.success(`Removed "${movieToRemove.title}" from watched list!`);
+                    return { success: true };
+                } catch (error) {
+                    // Rollback on error
+                    set({
+                        watchedMovies: currentWatched,
+                        isLoading: false,
+                        error: getUserFriendlyError(error, 'remove from watched list')
+                    });
+
+                    const errorMessage = getUserFriendlyError(error, 'remove from watched list');
+                    toastManager.error(errorMessage);
+                    console.error('Remove from watched failed:', error);
+                    return { success: false, error: errorMessage };
                 }
             },
 
