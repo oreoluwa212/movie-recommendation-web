@@ -568,7 +568,6 @@ export const movieApi = {
     }
 };
 
-
 // User API functions (unchanged, but can be enhanced similarly if needed)
 export const userApi = {
     updateProfile: async (profileData) => {
@@ -629,24 +628,6 @@ export const userApi = {
             },
             cacheKey
         );
-    }
-};
-
-// Utility functions for cache management
-export const cacheUtils = {
-    clearCache: () => {
-        apiCache.clear();
-        console.log('API cache cleared');
-    },
-
-    clearCacheByPattern: (pattern) => {
-        const keys = Array.from(apiCache.cache.keys());
-        keys.forEach(key => {
-            if (key.includes(pattern)) {
-                apiCache.cache.delete(key);
-            }
-        });
-        console.log(`Cache cleared for pattern: ${pattern}`);
     }
 };
 
@@ -796,5 +777,22 @@ export const watchlistsApi = {
     }
 };
 
-// Export the configured axios instance for custom requests
+// Utility functions for cache management
+export const cacheUtils = {
+    clearCache: () => {
+        apiCache.clear();
+        console.log('API cache cleared');
+    },
+
+    clearCacheByPattern: (pattern) => {
+        const keys = Array.from(apiCache.cache.keys());
+        keys.forEach(key => {
+            if (key.includes(pattern)) {
+                apiCache.cache.delete(key);
+            }
+        });
+        console.log(`Cache cleared for pattern: ${pattern}`);
+    }
+};
+
 export default api;

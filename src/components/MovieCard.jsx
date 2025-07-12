@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Star, Play, Heart, Eye, Plus, Calendar } from "lucide-react";
+import { Star, Play, Heart, Eye, BookmarkPlus, Calendar, Check } from "lucide-react";
+import { useUserStore } from "../stores/userStore";
 
 // Movie Card Skeleton
 const MovieCardSkeleton = ({ size = "medium" }) => {
@@ -18,15 +19,8 @@ const MovieCardSkeleton = ({ size = "medium" }) => {
 
   return (
     <div className={`${sizeClasses[size]} flex-shrink-0`}>
-      {/* Poster skeleton */}
-      <div
-        className={`animate-pulse ${posterSizeClasses[size]} bg-gray-800 rounded-lg mb-2`}
-      />
-
-      {/* Title skeleton */}
+      <div className={`animate-pulse ${posterSizeClasses[size]} bg-gray-800 rounded-lg mb-2`} />
       <div className="animate-pulse h-4 bg-gray-700 rounded w-4/5 mb-2" />
-
-      {/* Rating and year skeleton */}
       <div className="flex items-center justify-between">
         <div className="animate-pulse h-3 bg-gray-700 rounded w-12" />
         <div className="animate-pulse h-3 bg-gray-700 rounded w-10" />
@@ -40,28 +34,37 @@ const MovieCard = ({
   size = "medium",
   showActions = true,
   isAuthenticated = true,
-  onMovieClick, // Keep this for backward compatibility
+  onMovieClick,
   isLoading = false,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const navigate = useNavigate();
 
-  // Show skeleton while loading
+  const {
+    addToFavorites,
+    removeFromFavorites,
+    addToWatched,
+    removeFromWatched,
+    isFavorite,
+    isWatched,
+    getWatchedRating,
+    watchlists,
+    addMovieToWatchlist,
+    isLoading: userStoreLoading
+  } = useUserStore();
+
   if (isLoading) {
     return <MovieCardSkeleton size={size} />;
   }
 
-  // Return null if no movie data
   if (!movie) {
     return null;
   }
 
-  // Handle both API response formats (poster vs poster_path)
-  const imageUrl =
-    movie.poster || movie.poster_path
-      ? movie.poster || `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-      : "https://via.placeholder.com/400x600/1f2937/9ca3af?text=No+Image";
+  const imageUrl = movie.poster || movie.poster_path
+    ? movie.poster || `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+    : "https://via.placeholder.com/400x600/1f2937/9ca3af?text=No+Image";
 
   const sizeClasses = {
     small: "w-40",
@@ -75,44 +78,57 @@ const MovieCard = ({
     large: "h-72",
   };
 
-  const handleAddToFavorites = (e) => {
+  const movieIsFavorite = isFavorite(movie.id);
+  const movieIsWatched = isWatched(movie.id);
+  const userRating = getWatchedRating(movie.id);
+
+  const handleAddToFavorites = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log("Add to favorites:", movie.title);
+    
+    if (movieIsFavorite) {
+      await removeFromFavorites(movie.id);
+    } else {
+      await addToFavorites(movie);
+    }
   };
 
-  const handleAddToWatchlist = (e) => {
+  const handleAddToWatchlist = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log("Add to watchlist:", movie.title);
+    
+    if (watchlists.length > 0) {
+      const firstWatchlist = watchlists[0];
+      await addMovieToWatchlist(firstWatchlist.id, movie);
+    }
   };
 
-  const handleMarkAsWatched = (e) => {
+  const handleMarkAsWatched = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log("Mark as watched:", movie.title);
+    
+    if (movieIsWatched) {
+      await removeFromWatched(movie.id);
+    } else {
+      await addToWatched(movie);
+    }
   };
 
   const handleMovieClick = (e) => {
     e.preventDefault();
-
-    // If there's a custom onMovieClick handler, use it
     if (onMovieClick) {
       onMovieClick(movie);
     } else {
-      // Default navigation behavior
       navigate(`/movie/${movie.id}`);
     }
   };
 
-  // Handle different date formats
   const getReleaseYear = () => {
     const date = movie.releaseDate || movie.release_date;
     if (!date) return null;
     return new Date(date).getFullYear();
   };
 
-  // Handle different rating formats
   const getRating = () => {
     const rating = movie.rating || movie.vote_average;
     return rating ? rating.toFixed(1) : null;
@@ -125,10 +141,7 @@ const MovieCard = ({
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleMovieClick}
     >
-      {/* Movie Poster */}
-      <div
-        className={`relative ${posterSizeClasses[size]} overflow-hidden rounded-lg bg-gray-800 shadow-lg`}
-      >
+      <div className={`relative ${posterSizeClasses[size]} overflow-hidden rounded-lg bg-gray-800 shadow-lg`}>
         <img
           src={imageUrl}
           alt={movie.title}
@@ -137,33 +150,39 @@ const MovieCard = ({
           }`}
           onLoad={() => setImageLoaded(true)}
           onError={(e) => {
-            e.target.src =
-              "https://via.placeholder.com/400x600/1f2937/9ca3af?text=No+Image";
+            e.target.src = "https://via.placeholder.com/400x600/1f2937/9ca3af?text=No+Image";
             setImageLoaded(true);
           }}
         />
 
-        {/* Loading placeholder */}
         {!imageLoaded && (
           <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
             <div className="w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
         )}
 
-        {/* Overlay */}
-        <div
-          className={`absolute inset-0 bg-black/60 transition-opacity duration-300 ${
-            isHovered ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          {/* Play Button */}
+        <div className="absolute top-2 left-2 flex flex-col space-y-1">
+          {movieIsFavorite && (
+            <div className="bg-red-600 rounded-full p-1" title="In Favorites">
+              <Heart className="h-3 w-3 text-white fill-current" />
+            </div>
+          )}
+          {movieIsWatched && (
+            <div className="bg-green-600 rounded-full p-1" title="Watched">
+              <Check className="h-3 w-3 text-white" />
+            </div>
+          )}
+        </div>
+
+        <div className={`absolute inset-0 bg-black/60 transition-opacity duration-300 ${
+          isHovered ? "opacity-100" : "opacity-0"
+        }`}>
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="bg-red-600 rounded-full p-3 transform transition-all duration-300 hover:bg-red-700 hover:scale-110">
               <Play className="h-6 w-6 text-white fill-current" />
             </div>
           </div>
 
-          {/* Movie Info Overlay */}
           <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 via-black/70 to-transparent">
             <h3 className="text-white font-semibold text-sm mb-2 line-clamp-2 leading-tight">
               {movie.title}
@@ -177,6 +196,12 @@ const MovieCard = ({
                     <span>{getRating()}</span>
                   </div>
                 )}
+                {userRating && (
+                  <div className="flex items-center space-x-1">
+                    <Star className="h-3 w-3 text-blue-400 fill-current" />
+                    <span>{userRating}</span>
+                  </div>
+                )}
                 {getReleaseYear() && (
                   <div className="flex items-center space-x-1">
                     <Calendar className="h-3 w-3" />
@@ -187,47 +212,70 @@ const MovieCard = ({
             </div>
           </div>
 
-          {/* Action Buttons */}
           {showActions && isAuthenticated && (
             <div className="absolute top-2 right-2 flex flex-col space-y-1">
               <button
                 onClick={handleAddToFavorites}
-                className="bg-black/70 p-2 rounded-full hover:bg-red-600 transition-colors backdrop-blur-sm"
-                title="Add to Favorites"
+                disabled={userStoreLoading}
+                className={`p-2 rounded-full transition-all backdrop-blur-sm ${
+                  movieIsFavorite
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-black/70 hover:bg-red-600"
+                } ${userStoreLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+                title={movieIsFavorite ? "Remove from Favorites" : "Add to Favorites"}
               >
-                <Heart className="h-4 w-4 text-white" />
+                <Heart className={`h-4 w-4 text-white ${movieIsFavorite ? "fill-current" : ""}`} />
               </button>
+              
               <button
                 onClick={handleAddToWatchlist}
-                className="bg-black/70 p-2 rounded-full hover:bg-blue-600 transition-colors backdrop-blur-sm"
-                title="Add to Watchlist"
+                disabled={userStoreLoading || watchlists.length === 0}
+                className={`p-2 rounded-full transition-all backdrop-blur-sm ${
+                  watchlists.length === 0
+                    ? "bg-black/50 cursor-not-allowed"
+                    : "bg-black/70 hover:bg-blue-600"
+                } ${userStoreLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+                title={watchlists.length === 0 ? "Create a watchlist first" : "Add to Watchlist"}
               >
-                <Plus className="h-4 w-4 text-white" />
+                <BookmarkPlus className="h-4 w-4 text-white" />
               </button>
+              
               <button
                 onClick={handleMarkAsWatched}
-                className="bg-black/70 p-2 rounded-full hover:bg-green-600 transition-colors backdrop-blur-sm"
-                title="Mark as Watched"
+                disabled={userStoreLoading}
+                className={`p-2 rounded-full transition-all backdrop-blur-sm ${
+                  movieIsWatched
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-black/70 hover:bg-green-600"
+                } ${userStoreLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+                title={movieIsWatched ? "Remove from Watched" : "Mark as Watched"}
               >
-                <Eye className="h-4 w-4 text-white" />
+                <Eye className={`h-4 w-4 text-white ${movieIsWatched ? "fill-current" : ""}`} />
               </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Movie Title and Info (shown below poster) */}
       <div className="mt-2 px-1">
         <h3 className="text-white font-medium text-sm line-clamp-1 leading-tight mb-1">
           {movie.title}
         </h3>
         <div className="flex items-center justify-between text-xs text-gray-400">
-          {getRating() && (
-            <div className="flex items-center space-x-1">
-              <Star className="h-3 w-3 text-yellow-400 fill-current" />
-              <span>{getRating()}</span>
-            </div>
-          )}
+          <div className="flex items-center space-x-2">
+            {getRating() && (
+              <div className="flex items-center space-x-1">
+                <Star className="h-3 w-3 text-yellow-400 fill-current" />
+                <span>{getRating()}</span>
+              </div>
+            )}
+            {userRating && (
+              <div className="flex items-center space-x-1">
+                <Star className="h-3 w-3 text-blue-400 fill-current" />
+                <span>{userRating}</span>
+              </div>
+            )}
+          </div>
           {getReleaseYear() && <span>{getReleaseYear()}</span>}
         </div>
       </div>
