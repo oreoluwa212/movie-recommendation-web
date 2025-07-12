@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Star, Play, Heart, Eye, BookmarkPlus, Calendar, Check } from "lucide-react";
+import { toast } from 'react-toastify';
 import { useUserStore } from "../stores/userStore";
 
 // Movie Card Skeleton
@@ -86,10 +87,17 @@ const MovieCard = ({
     e.preventDefault();
     e.stopPropagation();
     
-    if (movieIsFavorite) {
-      await removeFromFavorites(movie.id);
-    } else {
-      await addToFavorites(movie);
+    try {
+      if (movieIsFavorite) {
+        await removeFromFavorites(movie.id);
+        toast.success(`${movie.title} removed from favorites`);
+      } else {
+        await addToFavorites(movie);
+        toast.success(`${movie.title} added to favorites`);
+      }
+    } catch (error) {
+      toast.error('Failed to update favorites');
+      console.error('Error updating favorites:', error);
     }
   };
 
@@ -97,9 +105,17 @@ const MovieCard = ({
     e.preventDefault();
     e.stopPropagation();
     
-    if (watchlists.length > 0) {
-      const firstWatchlist = watchlists[0];
-      await addMovieToWatchlist(firstWatchlist.id, movie);
+    try {
+      if (watchlists.length > 0) {
+        const firstWatchlist = watchlists[0];
+        await addMovieToWatchlist(firstWatchlist.id, movie);
+        toast.success(`${movie.title} added to watchlist`);
+      } else {
+        toast.info('Please create a watchlist first');
+      }
+    } catch (error) {
+      toast.error('Failed to add to watchlist');
+      console.error('Error adding to watchlist:', error);
     }
   };
 
@@ -107,10 +123,17 @@ const MovieCard = ({
     e.preventDefault();
     e.stopPropagation();
     
-    if (movieIsWatched) {
-      await removeFromWatched(movie.id);
-    } else {
-      await addToWatched(movie);
+    try {
+      if (movieIsWatched) {
+        await removeFromWatched(movie.id);
+        toast.success(`${movie.title} removed from watched`);
+      } else {
+        await addToWatched(movie);
+        toast.success(`${movie.title} marked as watched`);
+      }
+    } catch (error) {
+      toast.error('Failed to update watched status');
+      console.error('Error updating watched status:', error);
     }
   };
 

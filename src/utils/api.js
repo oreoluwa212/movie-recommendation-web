@@ -30,7 +30,7 @@ class APICache {
     }
 }
 
-// Request queue for rate limiting
+// Request queue for rate limiting - FIXED SETTINGS
 class RequestQueue {
     constructor(maxConcurrent = 2, delay = 1000) {
         this.queue = [];
@@ -61,25 +61,32 @@ class RequestQueue {
             .catch(reject)
             .finally(() => {
                 this.running.splice(this.running.indexOf(promise), 1);
-                setTimeout(() => this.process(), this.delay);
+                if (this.delay > 0) {
+                    setTimeout(() => this.process(), this.delay);
+                } else {
+                    setTimeout(() => this.process(), 0);
+                }
             });
 
         this.running.push(promise);
     }
 }
 
-// Initialize cache and request queue
+// Initialize cache and request queues
 const apiCache = new APICache();
-const requestQueue = new RequestQueue(1, 2000); // 1 request every 2 seconds
+// FIXED: More reasonable queue settings - 5 concurrent, 100ms delay
+const requestQueue = new RequestQueue(5, 100);
+// Separate queue for expensive operations
+const heavyQueue = new RequestQueue(2, 500);
 const ongoingRequests = new Map();
 
-// Enhanced axios instance
+// Enhanced axios instance with increased timeout
 const api = axios.create({
     baseURL: API_BASE_URL,
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 15000,
+    timeout: 30000, // FIXED: Increased from 15s to 30s
 });
 
 // Enhanced request interceptor
@@ -144,8 +151,8 @@ api.interceptors.response.use(
     }
 );
 
-// Enhanced request function with caching and queuing
-const makeRequest = async (requestFn, cacheKey = null, useQueue = false) => {
+// Enhanced request function with caching and selective queuing
+const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
     // Check cache first
     if (cacheKey) {
         const cachedData = apiCache.get(cacheKey);
@@ -161,10 +168,20 @@ const makeRequest = async (requestFn, cacheKey = null, useQueue = false) => {
         return ongoingRequests.get(cacheKey);
     }
 
-    // Create the request promise
-    const requestPromise = useQueue
-        ? requestQueue.add(requestFn)
-        : requestFn();
+    // Create the request promise with selective queuing
+    let requestPromise;
+    switch (queueType) {
+        case 'heavy':
+            requestPromise = heavyQueue.add(requestFn);
+            break;
+        case 'light':
+            requestPromise = requestQueue.add(requestFn);
+            break;
+        case 'none':
+        default:
+            requestPromise = requestFn();
+            break;
+    }
 
     // Store ongoing request
     if (cacheKey) {
@@ -372,8 +389,9 @@ export const authApi = {
     }
 };
 
-// Enhanced Movie API functions with caching and rate limiting
+// Enhanced Movie API functions with selective queuing
 export const movieApi = {
+    // FIXED: Light queuing for discovery endpoints
     getPopularMovies: async (page = 1) => {
         const cacheKey = `popular-movies-${page}`;
         return makeRequest(
@@ -382,7 +400,7 @@ export const movieApi = {
                 return response.data;
             },
             cacheKey,
-            true // Use queue for rate limiting
+            'light' // Light queuing instead of heavy
         );
     },
 
@@ -394,7 +412,7 @@ export const movieApi = {
                 return response.data;
             },
             cacheKey,
-            true
+            'light'
         );
     },
 
@@ -406,7 +424,7 @@ export const movieApi = {
                 return response.data;
             },
             cacheKey,
-            true
+            'light'
         );
     },
 
@@ -418,10 +436,24 @@ export const movieApi = {
                 return response.data;
             },
             cacheKey,
-            true
+            'light'
         );
     },
 
+    // FIXED: No queuing for fast endpoints like genres
+    getGenres: async () => {
+        const cacheKey = 'genres';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/movies/data/genres');
+                return response.data;
+            },
+            cacheKey,
+            'none' // No queuing for fast endpoints
+        );
+    },
+
+    // Heavy queuing for expensive operations
     searchMovies: async (query, page = 1) => {
         const cacheKey = `search-${query}-${page}`;
         return makeRequest(
@@ -430,7 +462,7 @@ export const movieApi = {
                 return response.data;
             },
             cacheKey,
-            true
+            'heavy' // Heavy queuing for search
         );
     },
 
@@ -442,19 +474,7 @@ export const movieApi = {
                 return response.data;
             },
             cacheKey,
-            true
-        );
-    },
-
-    getGenres: async () => {
-        const cacheKey = 'genres';
-        return makeRequest(
-            async () => {
-                const response = await api.get('/movies/data/genres');
-                return response.data;
-            },
-            cacheKey,
-            true
+            'light'
         );
     },
 
@@ -466,7 +486,7 @@ export const movieApi = {
                 return response.data;
             },
             cacheKey,
-            true
+            'light'
         );
     },
 
@@ -478,7 +498,7 @@ export const movieApi = {
                 return response.data;
             },
             cacheKey,
-            true
+            'heavy' // Heavy queuing for recommendations
         );
     },
 
@@ -490,7 +510,7 @@ export const movieApi = {
                 return response.data;
             },
             cacheKey,
-            true
+            'heavy' // Heavy queuing for similar movies
         );
     },
 
@@ -502,7 +522,7 @@ export const movieApi = {
                 return response.data;
             },
             cacheKey,
-            true
+            'heavy' // Heavy queuing for personalized recommendations
         );
     },
 
@@ -568,7 +588,7 @@ export const movieApi = {
     }
 };
 
-// User API functions (unchanged, but can be enhanced similarly if needed)
+// User API functions with selective queuing
 export const userApi = {
     updateProfile: async (profileData) => {
         try {
@@ -595,7 +615,8 @@ export const userApi = {
                 const response = await api.get('/users/favorites');
                 return response.data;
             },
-            cacheKey
+            cacheKey,
+            'none' // No queuing for user data
         );
     },
 
@@ -626,7 +647,8 @@ export const userApi = {
                 const response = await api.get('/users/watched');
                 return response.data;
             },
-            cacheKey
+            cacheKey,
+            'none' // No queuing for user data
         );
     },
 
@@ -642,7 +664,7 @@ export const userApi = {
     },
 };
 
-// Reviews API functions (unchanged)
+// Reviews API functions with selective queuing
 export const reviewsApi = {
     createOrUpdateReview: async (reviewData) => {
         try {
@@ -660,7 +682,8 @@ export const reviewsApi = {
                 const response = await api.get(`/reviews/movie/${movieId}?page=${page}&limit=${limit}`);
                 return response.data;
             },
-            cacheKey
+            cacheKey,
+            'light'
         );
     },
 
@@ -671,7 +694,8 @@ export const reviewsApi = {
                 const response = await api.get(`/reviews/${reviewId}`);
                 return response.data;
             },
-            cacheKey
+            cacheKey,
+            'none'
         );
     },
 
@@ -691,7 +715,8 @@ export const reviewsApi = {
                 const response = await api.get('/reviews/user/me');
                 return response.data;
             },
-            cacheKey
+            cacheKey,
+            'none'
         );
     },
 
@@ -702,12 +727,13 @@ export const reviewsApi = {
                 const response = await api.get(`/reviews/user/movie/${movieId}`);
                 return response.data;
             },
-            cacheKey
+            cacheKey,
+            'none'
         );
     }
 };
 
-// Watchlists API functions (unchanged)
+// Watchlists API functions with selective queuing
 export const watchlistsApi = {
     createWatchlist: async (watchlistData) => {
         try {
@@ -725,7 +751,8 @@ export const watchlistsApi = {
                 const response = await api.get('/watchlists');
                 return response.data;
             },
-            cacheKey
+            cacheKey,
+            'none'
         );
     },
 
@@ -736,7 +763,8 @@ export const watchlistsApi = {
                 const response = await api.get(`/watchlists/${watchlistId}`);
                 return response.data;
             },
-            cacheKey
+            cacheKey,
+            'light'
         );
     },
 
@@ -783,12 +811,13 @@ export const watchlistsApi = {
                 const response = await api.get(`/watchlists/public/all?page=${page}&limit=${limit}`);
                 return response.data;
             },
-            cacheKey
+            cacheKey,
+            'light'
         );
     }
 };
 
-// Utility functions for cache management
+// Utility functions for cache and queue management
 export const cacheUtils = {
     clearCache: () => {
         apiCache.clear();
@@ -803,6 +832,22 @@ export const cacheUtils = {
             }
         });
         console.log(`Cache cleared for pattern: ${pattern}`);
+    },
+
+    // New utility to check queue status
+    getQueueStatus: () => {
+        return {
+            lightQueue: {
+                pending: requestQueue.queue.length,
+                running: requestQueue.running.length,
+                maxConcurrent: requestQueue.maxConcurrent
+            },
+            heavyQueue: {
+                pending: heavyQueue.queue.length,
+                running: heavyQueue.running.length,
+                maxConcurrent: heavyQueue.maxConcurrent
+            }
+        };
     }
 };
 

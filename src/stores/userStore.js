@@ -2,7 +2,92 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { toast } from 'react-toastify';
+import axios from 'axios';
 import { userApi, reviewsApi, watchlistsApi } from '../utils/api';
+
+// Create axios instance with default config
+const apiClient = axios.create({
+    baseURL: import.meta.env.VITE_API_BASE_URL,
+    withCredentials: true,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
+
+// Add request interceptor to include auth token
+apiClient.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+// Add response interceptor to handle auth errors
+apiClient.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            // Clear invalid tokens
+            localStorage.removeItem('authToken');
+            sessionStorage.removeItem('authToken');
+            toast.error('Session expired. Please login again.');
+        }
+        return Promise.reject(error);
+    }
+);
+
+// IMPROVED: Single global promise cache with better cleanup
+class RequestCache {
+    constructor() {
+        this.cache = new Map();
+        this.timeouts = new Map();
+    }
+
+    get(key) {
+        return this.cache.get(key);
+    }
+
+    set(key, promise) {
+        this.cache.set(key, promise);
+        
+        // Auto-cleanup after 30 seconds to prevent memory leaks
+        const timeout = setTimeout(() => {
+            this.delete(key);
+        }, 30000);
+        
+        this.timeouts.set(key, timeout);
+    }
+
+    delete(key) {
+        this.cache.delete(key);
+        const timeout = this.timeouts.get(key);
+        if (timeout) {
+            clearTimeout(timeout);
+            this.timeouts.delete(key);
+        }
+    }
+
+    clear() {
+        this.cache.clear();
+        this.timeouts.forEach(timeout => clearTimeout(timeout));
+        this.timeouts.clear();
+    }
+
+    has(key) {
+        return this.cache.has(key);
+    }
+}
+
+const requestCache = new RequestCache();
+
+// IMPROVED: Authentication check helper
+const isAuthenticated = () => {
+    return !!(localStorage.getItem('authToken') || sessionStorage.getItem('authToken'));
+};
 
 export const useUserStore = create(
     persist(
@@ -13,9 +98,16 @@ export const useUserStore = create(
             watchlists: [],
             reviews: [],
             profile: null,
+            minimalProfile: null,
             isLoading: false,
             error: null,
             lastSync: null,
+            isMinimalProfileLoaded: false,
+            isMinimalProfileLoading: false,
+            
+            // NEW: Add initialization state
+            isInitialized: false,
+            initializationError: null,
 
             // Utility methods
             setLoading: (isLoading) => {
@@ -30,39 +122,389 @@ export const useUserStore = create(
                 set({ error: null });
             },
 
-            // Sync data with server
-            syncWithServer: async () => {
-                try {
-                    set({ isLoading: true, error: null });
+            // NEW: Single initialization method that should be called once
+            initialize: async () => {
+                const cacheKey = 'initialize';
+                const currentState = get();
 
-                    const [favoritesResponse, watchedResponse, watchlistsResponse, reviewsResponse] = await Promise.all([
-                        userApi.getFavorites(),
-                        userApi.getWatched(),
-                        watchlistsApi.getUserWatchlists(),
-                        reviewsApi.getUserReviews()
-                    ]);
-
-                    const favorites = favoritesResponse.favorites || favoritesResponse.data || favoritesResponse || [];
-                    const watched = watchedResponse.watched || watchedResponse.data || watchedResponse || [];
-                    const watchlists = watchlistsResponse.watchlists || watchlistsResponse.data || watchlistsResponse || [];
-                    const reviews = reviewsResponse.reviews || reviewsResponse.data || reviewsResponse || [];
-
-                    set({
-                        favorites,
-                        watchedMovies: watched,
-                        watchlists,
-                        reviews,
-                        lastSync: new Date().toISOString(),
-                        isLoading: false
-                    });
-
-                    return { favorites, watched, watchlists, reviews };
-                } catch (error) {
-                    const errorMessage = error.message || 'Failed to sync with server';
-                    set({ isLoading: false, error: errorMessage });
-                    console.error('Sync failed:', errorMessage);
-                    throw error;
+                // Skip if already initialized
+                if (currentState.isInitialized) {
+                    return { success: true, data: currentState.minimalProfile };
                 }
+
+                // Check for existing promise
+                if (requestCache.has(cacheKey)) {
+                    console.log('⏳ Initialization already in progress, waiting...');
+                    return await requestCache.get(cacheKey);
+                }
+
+                // Only initialize if authenticated
+                if (!isAuthenticated()) {
+                    set({ isInitialized: true });
+                    return { success: false, error: 'Not authenticated' };
+                }
+
+                const initPromise = (async () => {
+                    try {
+                        set({ 
+                            isMinimalProfileLoading: true, 
+                            isLoading: true, 
+                            error: null,
+                            initializationError: null
+                        });
+
+                        console.log('🚀 Initializing user store...');
+
+                        // Load minimal profile first
+                        const response = await apiClient.get('/users/profile/minimal');
+
+                        if (response.data.success && response.data.user) {
+                            set({
+                                minimalProfile: response.data.user,
+                                isMinimalProfileLoaded: true,
+                                isMinimalProfileLoading: false,
+                                isInitialized: true,
+                                isLoading: false,
+                                error: null
+                            });
+
+                            console.log('✅ User store initialized successfully');
+                            return { success: true, data: response.data.user };
+                        } else {
+                            throw new Error(response.data.message || 'Invalid response from server');
+                        }
+                    } catch (error) {
+                        console.error('❌ User store initialization failed:', error);
+                        const errorMessage = error.response?.data?.message || error.message || 'Failed to initialize';
+                        
+                        set({
+                            error: errorMessage,
+                            initializationError: errorMessage,
+                            isMinimalProfileLoading: false,
+                            isLoading: false,
+                            isInitialized: true, // Mark as initialized even if failed
+                            isMinimalProfileLoaded: false
+                        });
+
+                        return { success: false, error: errorMessage };
+                    } finally {
+                        requestCache.delete(cacheKey);
+                    }
+                })();
+
+                requestCache.set(cacheKey, initPromise);
+                return await initPromise;
+            },
+
+            // IMPROVED: Simplified minimal profile loading
+            loadMinimalProfile: async (forceRefresh = false) => {
+                const currentState = get();
+
+                // If not authenticated, don't load
+                if (!isAuthenticated()) {
+                    return { success: false, error: 'Not authenticated' };
+                }
+
+                // Use cached data if available and not forcing refresh
+                if (!forceRefresh && currentState.isMinimalProfileLoaded && currentState.minimalProfile) {
+                    return { success: true, data: currentState.minimalProfile };
+                }
+
+                // If not initialized, call initialize instead
+                if (!currentState.isInitialized) {
+                    return await get().initialize();
+                }
+
+                // Force refresh logic
+                const cacheKey = 'loadMinimalProfile';
+                
+                if (requestCache.has(cacheKey)) {
+                    return await requestCache.get(cacheKey);
+                }
+
+                const loadPromise = (async () => {
+                    try {
+                        set({ isMinimalProfileLoading: true, isLoading: true, error: null });
+
+                        const response = await apiClient.get('/users/profile/minimal');
+
+                        if (response.data.success && response.data.user) {
+                            set({
+                                minimalProfile: response.data.user,
+                                isMinimalProfileLoaded: true,
+                                isMinimalProfileLoading: false,
+                                isLoading: false,
+                                error: null
+                            });
+
+                            return { success: true, data: response.data.user };
+                        } else {
+                            throw new Error(response.data.message || 'Invalid response from server');
+                        }
+                    } catch (error) {
+                        const errorMessage = error.response?.data?.message || error.message || 'Failed to load minimal profile';
+                        set({
+                            error: errorMessage,
+                            isMinimalProfileLoading: false,
+                            isLoading: false,
+                            isMinimalProfileLoaded: false
+                        });
+
+                        return { success: false, error: errorMessage };
+                    } finally {
+                        requestCache.delete(cacheKey);
+                    }
+                })();
+
+                requestCache.set(cacheKey, loadPromise);
+                return await loadPromise;
+            },
+
+            // IMPROVED: Load full profile with better caching
+            loadProfile: async (forceRefresh = false) => {
+                const cacheKey = 'loadProfile';
+                const currentState = get();
+
+                if (!isAuthenticated()) {
+                    return { success: false, error: 'Not authenticated' };
+                }
+
+                // Return cached data if available and not forcing refresh
+                if (!forceRefresh && currentState.profile) {
+                    return { success: true, data: currentState.profile };
+                }
+
+                // Check for existing request
+                if (requestCache.has(cacheKey)) {
+                    return await requestCache.get(cacheKey);
+                }
+
+                const loadPromise = (async () => {
+                    try {
+                        set({ isLoading: true, error: null });
+
+                        const response = await apiClient.get('/users/profile');
+
+                        if (response.data.success && response.data.user) {
+                            // Map API response to store structure
+                            const profile = {
+                                ...response.data.user,
+                                stats: response.data.user.stats || {}
+                            };
+
+                            // Extract and map user data
+                            const favorites = response.data.user.favoriteMovies?.map(fav => ({
+                                movieId: fav.movieId,
+                                title: fav.title,
+                                poster: fav.poster,
+                                addedAt: fav.addedAt,
+                                _id: fav._id
+                            })) || [];
+
+                            const watchedMovies = response.data.user.watchedMovies?.map(watched => ({
+                                movieId: watched.movieId,
+                                title: watched.title,
+                                poster: watched.poster,
+                                rating: watched.rating,
+                                watchedAt: watched.watchedAt,
+                                _id: watched._id
+                            })) || [];
+
+                            set({
+                                profile,
+                                favorites,
+                                watchedMovies,
+                                minimalProfile: {
+                                    _id: response.data.user._id,
+                                    username: response.data.user.username,
+                                    avatar: response.data.user.avatar,
+                                    isEmailVerified: response.data.user.isEmailVerified,
+                                    preferences: response.data.user.preferences
+                                },
+                                isMinimalProfileLoaded: true,
+                                isInitialized: true,
+                                isLoading: false,
+                                lastSync: new Date().toISOString()
+                            });
+
+                            return { success: true, data: profile };
+                        } else {
+                            throw new Error(response.data.message || 'Invalid response from server');
+                        }
+                    } catch (error) {
+                        const errorMessage = error.response?.data?.message || error.message || 'Failed to load profile';
+                        set({ isLoading: false, error: errorMessage });
+                        console.error('Load profile failed:', errorMessage);
+                        throw error;
+                    } finally {
+                        requestCache.delete(cacheKey);
+                    }
+                })();
+
+                requestCache.set(cacheKey, loadPromise);
+                return await loadPromise;
+            },
+
+            // IMPROVED: Better sync management
+            syncWithServer: async (forceRefresh = false) => {
+                const cacheKey = 'syncWithServer';
+
+                if (!isAuthenticated()) {
+                    return { success: false, error: 'Not authenticated' };
+                }
+
+                // Check for existing sync
+                if (requestCache.has(cacheKey)) {
+                    return await requestCache.get(cacheKey);
+                }
+
+                const syncPromise = (async () => {
+                    try {
+                        set({ isLoading: true, error: null });
+
+                        // Initialize if not done
+                        if (!get().isInitialized) {
+                            await get().initialize();
+                        }
+
+                        // Load profile if not loaded or force refresh
+                        if (!get().profile || forceRefresh) {
+                            await get().loadProfile(forceRefresh);
+                        }
+
+                        // Load additional data
+                        const [watchlistsResponse, reviewsResponse] = await Promise.all([
+                            watchlistsApi.getUserWatchlists(),
+                            reviewsApi.getUserReviews()
+                        ]);
+
+                        const watchlists = watchlistsResponse.watchlists || watchlistsResponse.data || watchlistsResponse || [];
+                        const reviews = reviewsResponse.reviews || reviewsResponse.data || reviewsResponse || [];
+
+                        set({
+                            watchlists,
+                            reviews,
+                            lastSync: new Date().toISOString(),
+                            isLoading: false
+                        });
+
+                        const currentState = get();
+                        return {
+                            favorites: currentState.favorites,
+                            watched: currentState.watchedMovies,
+                            watchlists,
+                            reviews,
+                            profile: currentState.profile
+                        };
+                    } catch (error) {
+                        const errorMessage = error.response?.data?.message || error.message || 'Failed to sync with server';
+                        set({ isLoading: false, error: errorMessage });
+                        console.error('Sync failed:', errorMessage);
+                        throw error;
+                    } finally {
+                        requestCache.delete(cacheKey);
+                    }
+                })();
+
+                requestCache.set(cacheKey, syncPromise);
+                return await syncPromise;
+            },
+
+            // IMPROVED: Better cleanup
+            resetLoadingStates: () => {
+                set({
+                    isMinimalProfileLoaded: false,
+                    isMinimalProfileLoading: false,
+                    isLoading: false,
+                    isInitialized: false,
+                    initializationError: null
+                });
+                requestCache.clear();
+            },
+
+            clearAllData: () => {
+                set({
+                    favorites: [],
+                    watchedMovies: [],
+                    watchlists: [],
+                    reviews: [],
+                    profile: null,
+                    minimalProfile: null,
+                    isLoading: false,
+                    isMinimalProfileLoading: false,
+                    error: null,
+                    lastSync: null,
+                    isMinimalProfileLoaded: false,
+                    isInitialized: false,
+                    initializationError: null
+                });
+                requestCache.clear();
+                toast.info('All data cleared');
+            },
+
+            reset: () => {
+                set({
+                    favorites: [],
+                    watchedMovies: [],
+                    watchlists: [],
+                    reviews: [],
+                    profile: null,
+                    minimalProfile: null,
+                    isLoading: false,
+                    isMinimalProfileLoading: false,
+                    error: null,
+                    lastSync: null,
+                    isMinimalProfileLoaded: false,
+                    isInitialized: false,
+                    initializationError: null
+                });
+                requestCache.clear();
+            },
+
+            // Helper methods
+            hasMinimalProfile: () => {
+                const currentState = get();
+                return currentState.isMinimalProfileLoaded && currentState.minimalProfile;
+            },
+
+            isReady: () => {
+                const currentState = get();
+                return currentState.isInitialized && !currentState.isMinimalProfileLoading;
+            },
+
+            refreshMinimalProfile: async () => {
+                return await get().loadMinimalProfile(true);
+            },
+
+            // ... rest of your existing methods remain the same
+            getWatchedRating: (movieId) => {
+                const watched = get().watchedMovies;
+                const watchedMovie = watched.find(w => w.movieId === movieId);
+                return watchedMovie ? watchedMovie.rating : null;
+            },
+
+            getUserReviewForMovie: (movieId) => {
+                const reviews = get().reviews;
+                return reviews.find(r => r.movieId === movieId);
+            },
+
+            getWatchlistsContainingMovie: (movieId) => {
+                const watchlists = get().watchlists;
+                return watchlists.filter(w => w.movies.some(m => m.id === movieId));
+            },
+
+            getNavbarData: () => {
+                const minimalProfile = get().minimalProfile;
+                const favorites = get().favorites;
+                const watchedMovies = get().watchedMovies;
+
+                return {
+                    user: minimalProfile,
+                    quickStats: {
+                        favorites: favorites.length,
+                        watched: watchedMovies.length
+                    }
+                };
             },
 
             // Favorites management
@@ -89,6 +531,20 @@ export const useUserStore = create(
                     // First update local state for immediate UI response
                     const updatedFavorites = [...currentFavorites, favoriteMovie];
                     set({ favorites: updatedFavorites });
+
+                    // Update profile stats
+                    const currentProfile = get().profile;
+                    if (currentProfile) {
+                        set({
+                            profile: {
+                                ...currentProfile,
+                                stats: {
+                                    ...currentProfile.stats,
+                                    totalFavorites: updatedFavorites.length
+                                }
+                            }
+                        });
+                    }
 
                     // Then sync with server
                     await userApi.addFavorite(favoriteMovie);
@@ -124,6 +580,20 @@ export const useUserStore = create(
                     // First update local state
                     const updatedFavorites = currentFavorites.filter(fav => fav.movieId !== movieId);
                     set({ favorites: updatedFavorites });
+
+                    // Update profile stats
+                    const currentProfile = get().profile;
+                    if (currentProfile) {
+                        set({
+                            profile: {
+                                ...currentProfile,
+                                stats: {
+                                    ...currentProfile.stats,
+                                    totalFavorites: updatedFavorites.length
+                                }
+                            }
+                        });
+                    }
 
                     // Then sync with server
                     await userApi.removeFavorite(movieId);
@@ -170,6 +640,26 @@ export const useUserStore = create(
                     const updatedWatched = [...currentWatched, watchedMovie];
                     set({ watchedMovies: updatedWatched });
 
+                    // Update profile stats
+                    const currentProfile = get().profile;
+                    if (currentProfile) {
+                        const ratedMovies = updatedWatched.filter(movie => movie.rating);
+                        const averageRating = ratedMovies.length > 0
+                            ? (ratedMovies.reduce((sum, movie) => sum + movie.rating, 0) / ratedMovies.length).toFixed(1)
+                            : "0";
+
+                        set({
+                            profile: {
+                                ...currentProfile,
+                                stats: {
+                                    ...currentProfile.stats,
+                                    totalWatched: updatedWatched.length,
+                                    averageRating
+                                }
+                            }
+                        });
+                    }
+
                     // Then sync with server
                     await userApi.addToWatched(watchedMovie);
 
@@ -189,353 +679,6 @@ export const useUserStore = create(
                 }
             },
 
-            removeFromWatched: async (movieId) => {
-                const currentWatched = get().watchedMovies;
-                const movieToRemove = currentWatched.find(watched => watched.movieId === movieId);
-
-                if (!movieToRemove) {
-                    toast.info('Movie not found in watched list');
-                    return { success: false, error: 'Movie not in watched list' };
-                }
-
-                set({ isLoading: true, error: null });
-
-                try {
-                    // First update local state
-                    const updatedWatched = currentWatched.filter(watched => watched.movieId !== movieId);
-                    set({ watchedMovies: updatedWatched });
-
-                    // Then sync with server
-                    await userApi.removeFromWatched(movieId);
-
-                    set({ isLoading: false });
-                    toast.success(`Removed "${movieToRemove.title}" from watched list!`);
-                    return { success: true };
-                } catch (error) {
-                    // Rollback on error
-                    set({
-                        watchedMovies: currentWatched,
-                        isLoading: false,
-                        error: error.message || 'Failed to remove from watched list'
-                    });
-                    toast.error(error.message || 'Failed to remove from watched list');
-                    console.error('Remove from watched failed:', error);
-                    return { success: false, error: error.message || 'Failed to remove from watched list' };
-                }
-            },
-
-            // Watchlists management
-            createWatchlist: async (name, description = '', isPublic = false) => {
-                set({ isLoading: true, error: null });
-
-                try {
-                    const response = await watchlistsApi.createWatchlist({
-                        name,
-                        description,
-                        isPublic
-                    });
-
-                    const newWatchlist = {
-                        id: response.id || Date.now().toString(),
-                        name,
-                        description,
-                        isPublic,
-                        movies: [],
-                        createdAt: new Date().toISOString()
-                    };
-
-                    const updatedWatchlists = [...get().watchlists, newWatchlist];
-                    set({
-                        watchlists: updatedWatchlists,
-                        isLoading: false
-                    });
-
-                    toast.success(`Created watchlist "${name}"!`);
-                    return { success: true, data: newWatchlist };
-                } catch (error) {
-                    const errorMessage = error.message || 'Failed to create watchlist';
-                    set({ isLoading: false, error: errorMessage });
-                    toast.error(errorMessage);
-                    console.error('Create watchlist failed:', error);
-                    return { success: false, error: errorMessage };
-                }
-            },
-
-            deleteWatchlist: async (watchlistId) => {
-                const currentWatchlists = get().watchlists;
-                const watchlistToDelete = currentWatchlists.find(w => w.id === watchlistId);
-
-                if (!watchlistToDelete) {
-                    toast.error('Watchlist not found');
-                    return { success: false, error: 'Watchlist not found' };
-                }
-
-                set({ isLoading: true, error: null });
-
-                try {
-                    // First update local state
-                    const updatedWatchlists = currentWatchlists.filter(w => w.id !== watchlistId);
-                    set({ watchlists: updatedWatchlists });
-
-                    // Then sync with server
-                    await watchlistsApi.deleteWatchlist(watchlistId);
-
-                    set({ isLoading: false });
-                    toast.success(`Deleted watchlist "${watchlistToDelete.name}"!`);
-                    return { success: true };
-                } catch (error) {
-                    // Rollback on error
-                    set({
-                        watchlists: currentWatchlists,
-                        isLoading: false,
-                        error: error.message || 'Failed to delete watchlist'
-                    });
-                    toast.error(error.message || 'Failed to delete watchlist');
-                    console.error('Delete watchlist failed:', error);
-                    return { success: false, error: error.message || 'Failed to delete watchlist' };
-                }
-            },
-
-            updateWatchlist: async (watchlistId, updates) => {
-                const currentWatchlists = get().watchlists;
-                const watchlistIndex = currentWatchlists.findIndex(w => w.id === watchlistId);
-
-                if (watchlistIndex === -1) {
-                    toast.error('Watchlist not found');
-                    return { success: false, error: 'Watchlist not found' };
-                }
-
-                set({ isLoading: true, error: null });
-
-                try {
-                    // First update local state
-                    const updatedWatchlists = [...currentWatchlists];
-                    updatedWatchlists[watchlistIndex] = {
-                        ...updatedWatchlists[watchlistIndex],
-                        ...updates
-                    };
-                    set({ watchlists: updatedWatchlists });
-
-                    // Then sync with server
-                    await watchlistsApi.updateWatchlist(watchlistId, updates);
-
-                    set({ isLoading: false });
-                    toast.success('Watchlist updated successfully!');
-                    return { success: true, data: updatedWatchlists[watchlistIndex] };
-                } catch (error) {
-                    // Rollback on error
-                    set({
-                        watchlists: currentWatchlists,
-                        isLoading: false,
-                        error: error.message || 'Failed to update watchlist'
-                    });
-                    toast.error(error.message || 'Failed to update watchlist');
-                    console.error('Update watchlist failed:', error);
-                    return { success: false, error: error.message || 'Failed to update watchlist' };
-                }
-            },
-
-            addMovieToWatchlist: async (watchlistId, movieData) => {
-                const currentWatchlists = get().watchlists;
-                const watchlistIndex = currentWatchlists.findIndex(w => w.id === watchlistId);
-
-                if (watchlistIndex === -1) {
-                    toast.error('Watchlist not found');
-                    return { success: false, error: 'Watchlist not found' };
-                }
-
-                const watchlist = currentWatchlists[watchlistIndex];
-                const isAlreadyInList = watchlist.movies.some(movie => movie.id === movieData.id);
-
-                if (isAlreadyInList) {
-                    toast.info('Movie is already in this watchlist!');
-                    return { success: false, error: 'Already in watchlist' };
-                }
-
-                set({ isLoading: true, error: null });
-
-                try {
-                    // First update local state
-                    const updatedWatchlists = [...currentWatchlists];
-                    updatedWatchlists[watchlistIndex] = {
-                        ...watchlist,
-                        movies: [...watchlist.movies, movieData]
-                    };
-                    set({ watchlists: updatedWatchlists });
-
-                    // Then sync with server
-                    await watchlistsApi.addMovieToWatchlist(watchlistId, {
-                        movieId: movieData.id,
-                        title: movieData.title,
-                        poster: movieData.poster_path
-                    });
-
-                    set({ isLoading: false });
-                    toast.success(`Added "${movieData.title}" to "${watchlist.name}"!`);
-                    return { success: true };
-                } catch (error) {
-                    // Rollback on error
-                    set({
-                        watchlists: currentWatchlists,
-                        isLoading: false,
-                        error: error.message || 'Failed to add movie to watchlist'
-                    });
-                    toast.error(error.message || 'Failed to add movie to watchlist');
-                    console.error('Add to watchlist failed:', error);
-                    return { success: false, error: error.message || 'Failed to add movie to watchlist' };
-                }
-            },
-
-            removeMovieFromWatchlist: async (watchlistId, movieId) => {
-                const currentWatchlists = get().watchlists;
-                const watchlistIndex = currentWatchlists.findIndex(w => w.id === watchlistId);
-
-                if (watchlistIndex === -1) {
-                    toast.error('Watchlist not found');
-                    return { success: false, error: 'Watchlist not found' };
-                }
-
-                set({ isLoading: true, error: null });
-
-                try {
-                    // First update local state
-                    const updatedWatchlists = [...currentWatchlists];
-                    const watchlist = updatedWatchlists[watchlistIndex];
-                    const movieToRemove = watchlist.movies.find(movie => movie.id === movieId);
-
-                    updatedWatchlists[watchlistIndex] = {
-                        ...watchlist,
-                        movies: watchlist.movies.filter(movie => movie.id !== movieId)
-                    };
-                    set({ watchlists: updatedWatchlists });
-
-                    // Then sync with server
-                    await watchlistsApi.removeMovieFromWatchlist(watchlistId, movieId);
-
-                    set({ isLoading: false });
-                    toast.success(`Removed "${movieToRemove?.title}" from "${watchlist.name}"!`);
-                    return { success: true };
-                } catch (error) {
-                    // Rollback on error
-                    set({
-                        watchlists: currentWatchlists,
-                        isLoading: false,
-                        error: error.message || 'Failed to remove movie from watchlist'
-                    });
-                    toast.error(error.message || 'Failed to remove movie from watchlist');
-                    console.error('Remove from watchlist failed:', error);
-                    return { success: false, error: error.message || 'Failed to remove movie from watchlist' };
-                }
-            },
-
-            // Reviews management
-            createOrUpdateReview: async (movieId, reviewData) => {
-                set({ isLoading: true, error: null });
-
-                try {
-                    const response = await reviewsApi.createOrUpdateReview({
-                        movieId,
-                        ...reviewData
-                    });
-
-                    const currentReviews = get().reviews;
-                    const existingReviewIndex = currentReviews.findIndex(r => r.movieId === movieId);
-
-                    const newReview = {
-                        id: response.id || Date.now().toString(),
-                        movieId,
-                        ...reviewData,
-                        createdAt: response.createdAt || new Date().toISOString(),
-                        updatedAt: new Date().toISOString()
-                    };
-
-                    let updatedReviews;
-                    if (existingReviewIndex >= 0) {
-                        updatedReviews = [...currentReviews];
-                        updatedReviews[existingReviewIndex] = newReview;
-                        toast.success('Review updated successfully!');
-                    } else {
-                        updatedReviews = [...currentReviews, newReview];
-                        toast.success('Review created successfully!');
-                    }
-
-                    set({
-                        reviews: updatedReviews,
-                        isLoading: false
-                    });
-
-                    return { success: true, data: newReview };
-                } catch (error) {
-                    const errorMessage = error.message || 'Failed to save review';
-                    set({ isLoading: false, error: errorMessage });
-                    toast.error(errorMessage);
-                    console.error('Save review failed:', error);
-                    return { success: false, error: errorMessage };
-                }
-            },
-
-            deleteReview: async (reviewId) => {
-                const currentReviews = get().reviews;
-                const reviewToDelete = currentReviews.find(r => r.id === reviewId);
-
-                if (!reviewToDelete) {
-                    toast.error('Review not found');
-                    return { success: false, error: 'Review not found' };
-                }
-
-                set({ isLoading: true, error: null });
-
-                try {
-                    // First update local state
-                    const updatedReviews = currentReviews.filter(r => r.id !== reviewId);
-                    set({ reviews: updatedReviews });
-
-                    // Then sync with server
-                    await reviewsApi.deleteReview(reviewId);
-
-                    set({ isLoading: false });
-                    toast.success('Review deleted successfully!');
-                    return { success: true };
-                } catch (error) {
-                    // Rollback on error
-                    set({
-                        reviews: currentReviews,
-                        isLoading: false,
-                        error: error.message || 'Failed to delete review'
-                    });
-                    toast.error(error.message || 'Failed to delete review');
-                    console.error('Delete review failed:', error);
-                    return { success: false, error: error.message || 'Failed to delete review' };
-                }
-            },
-
-            // Profile management
-            updateProfile: async (profileData) => {
-                set({ isLoading: true, error: null });
-
-                try {
-                    const updatedProfile = {
-                        ...get().profile,
-                        ...profileData,
-                        updatedAt: new Date().toISOString()
-                    };
-
-                    set({
-                        profile: updatedProfile,
-                        isLoading: false
-                    });
-
-                    toast.success('Profile updated successfully!');
-                    return { success: true, data: updatedProfile };
-                } catch (error) {
-                    const errorMessage = error.message || 'Failed to update profile';
-                    set({ isLoading: false, error: errorMessage });
-                    toast.error(errorMessage);
-                    console.error('Update profile failed:', error);
-                    return { success: false, error: errorMessage };
-                }
-            },
-
             // Helper methods
             isFavorite: (movieId) => {
                 const favorites = get().favorites;
@@ -545,22 +688,6 @@ export const useUserStore = create(
             isWatched: (movieId) => {
                 const watched = get().watchedMovies;
                 return watched.some(w => w.movieId === movieId);
-            },
-
-            getWatchedRating: (movieId) => {
-                const watched = get().watchedMovies;
-                const watchedMovie = watched.find(w => w.movieId === movieId);
-                return watchedMovie ? watchedMovie.rating : null;
-            },
-
-            getUserReviewForMovie: (movieId) => {
-                const reviews = get().reviews;
-                return reviews.find(r => r.movieId === movieId);
-            },
-
-            getWatchlistsContainingMovie: (movieId) => {
-                const watchlists = get().watchlists;
-                return watchlists.filter(w => w.movies.some(m => m.id === movieId));
             },
 
             // Stats
@@ -587,35 +714,6 @@ export const useUserStore = create(
                         ? reviews.reduce((sum, review) => sum + (review.rating || 0), 0) / reviews.length
                         : 0
                 };
-            },
-
-            // Clear all data
-            clearAllData: () => {
-                set({
-                    favorites: [],
-                    watchedMovies: [],
-                    watchlists: [],
-                    reviews: [],
-                    profile: null,
-                    isLoading: false,
-                    error: null,
-                    lastSync: null
-                });
-                toast.info('All data cleared');
-            },
-
-            // Reset store to initial state
-            reset: () => {
-                set({
-                    favorites: [],
-                    watchedMovies: [],
-                    watchlists: [],
-                    reviews: [],
-                    profile: null,
-                    isLoading: false,
-                    error: null,
-                    lastSync: null
-                });
             }
         }),
         {
@@ -626,7 +724,11 @@ export const useUserStore = create(
                 watchlists: state.watchlists,
                 reviews: state.reviews,
                 profile: state.profile,
-                lastSync: state.lastSync
+                minimalProfile: state.minimalProfile,
+                lastSync: state.lastSync,
+                isMinimalProfileLoaded: state.isMinimalProfileLoaded,
+                isInitialized: state.isInitialized
+                // Don't persist loading states
             })
         }
     )
