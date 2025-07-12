@@ -576,7 +576,6 @@ export const useUserStore = create(
                 return await get().loadMinimalProfile(true);
             },
 
-            // ... rest of your existing methods remain the same
             getWatchedRating: (movieId) => {
                 const watched = get().watchedMovies;
                 const watchedMovie = watched.find(w => w.movieId === movieId);
@@ -591,20 +590,6 @@ export const useUserStore = create(
             getWatchlistsContainingMovie: (movieId) => {
                 const watchlists = get().watchlists;
                 return watchlists.filter(w => w.movies.some(m => m.id === movieId));
-            },
-
-            getNavbarData: () => {
-                const minimalProfile = get().minimalProfile;
-                const favorites = get().favorites;
-                const watchedMovies = get().watchedMovies;
-
-                return {
-                    user: minimalProfile,
-                    quickStats: {
-                        favorites: favorites.length,
-                        watched: watchedMovies.length
-                    }
-                };
             },
 
             // IMPROVED: Favorites management with better error handling
@@ -875,6 +860,20 @@ export const useUserStore = create(
             isWatched: (movieId) => {
                 const watched = get().watchedMovies;
                 return watched.some(w => w.movieId === movieId);
+            },
+
+            getNavbarData: () => {
+                const minimalProfile = get().minimalProfile;
+                const favorites = get().favorites;
+                const watchedMovies = get().watchedMovies;
+
+                return {
+                    user: minimalProfile,
+                    quickStats: {
+                        favorites: favorites.length,
+                        watched: watchedMovies.length
+                    }
+                };
             },
 
             // Stats

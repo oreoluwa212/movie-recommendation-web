@@ -12,10 +12,13 @@ import {
   Users,
   Globe,
   DollarSign,
+  Check,
+  X,
 } from "lucide-react";
 import { movieApi } from "../utils/api";
-import MovieCard from "../components/MovieCard";
 import MovieSection from "../components/MovieSection";
+import Button from "../components/ui/Button";
+import { useUserStore } from "../stores/userStore";
 
 const MovieDetails = () => {
   const { id } = useParams();
@@ -28,6 +31,18 @@ const MovieDetails = () => {
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [similarMoviesLoading, setSimilarMoviesLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
+  const [actionLoading, setActionLoading] = useState(null); // Track which action is loading
+
+  // Get user store methods and state
+  const {
+    addToFavorites,
+    removeFromFavorites,
+    addToWatched,
+    removeFromWatched,
+    isFavorite,
+    isWatched,
+    isLoading: userStoreLoading,
+  } = useUserStore();
 
   useEffect(() => {
     const fetchMovieData = async () => {
@@ -83,30 +98,52 @@ const MovieDetails = () => {
     }
   };
 
-  const handleAddToFavorites = async () => {
+  const handleToggleFavorites = async () => {
+    if (!movie) return;
+
+    setActionLoading("favorites");
     try {
-      console.log("Adding to favorites:", movie.title);
-      // Implement API call here
+      const isMovieFavorite = isFavorite(movie.id);
+      
+      if (isMovieFavorite) {
+        await removeFromFavorites(movie.id);
+      } else {
+        await addToFavorites(movie);
+      }
     } catch (err) {
-      console.error("Error adding to favorites:", err);
+      console.error("Error toggling favorites:", err);
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleAddToWatchlist = async () => {
+    // Note: This would be for a separate watchlist functionality
+    // if you have it in your store. For now, I'll keep the console.log
     try {
       console.log("Adding to watchlist:", movie.title);
-      // Implement API call here
+      // Implement API call here if you have watchlist functionality
     } catch (err) {
       console.error("Error adding to watchlist:", err);
     }
   };
 
-  const handleMarkAsWatched = async () => {
+  const handleToggleWatched = async () => {
+    if (!movie) return;
+
+    setActionLoading("watched");
     try {
-      console.log("Marking as watched:", movie.title);
-      // Implement API call here
+      const isMovieWatched = isWatched(movie.id);
+      
+      if (isMovieWatched) {
+        await removeFromWatched(movie.id);
+      } else {
+        await addToWatched(movie);
+      }
     } catch (err) {
-      console.error("Error marking as watched:", err);
+      console.error("Error toggling watched status:", err);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -145,12 +182,9 @@ const MovieDetails = () => {
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-4">Error Loading Movie</h2>
           <p className="text-gray-400 mb-6">{error}</p>
-          <button
-            onClick={() => navigate("/")}
-            className="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg transition-colors"
-          >
+          <Button variant="primary" size="medium" onClick={() => navigate("/")}>
             Go Home
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -176,6 +210,10 @@ const MovieDetails = () => {
   const runtime = movie.runtime;
   const genres = movie.genres || [];
 
+  // Check if movie is already in favorites or watched
+  const isMovieFavorite = isFavorite(movie.id);
+  const isMovieWatched = isWatched(movie.id);
+
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Hero Section */}
@@ -196,13 +234,15 @@ const MovieDetails = () => {
         <div className="relative z-10 pt-20 pb-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Back Button */}
-            <button
+            <Button
+              variant="ghost"
+              size="medium"
+              leftIcon={<ArrowLeft className="h-5 w-5" />}
               onClick={() => navigate(-1)}
-              className="flex items-center space-x-2 text-gray-300 hover:text-white mb-8 transition-colors"
+              className="mb-8"
             >
-              <ArrowLeft className="h-5 w-5" />
-              <span>Back</span>
-            </button>
+              Back
+            </Button>
 
             <div className="flex flex-col lg:flex-row gap-8">
               {/* Movie Poster */}
@@ -269,38 +309,88 @@ const MovieDetails = () => {
                 {/* Action Buttons */}
                 <div className="flex flex-wrap gap-4 mb-8">
                   {movie.trailer && (
-                    <button
+                    <Button
+                      variant="primary"
+                      size="medium"
+                      leftIcon={<Play className="h-5 w-5" />}
                       onClick={handleWatchTrailer}
-                      className="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors"
                     >
-                      <Play className="h-5 w-5" />
-                      <span>Watch Trailer</span>
-                    </button>
+                      Watch Trailer
+                    </Button>
                   )}
 
-                  <button
-                    onClick={handleAddToFavorites}
-                    className="bg-gray-800 hover:bg-gray-700 px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors"
+                  <Button
+                    variant={isMovieFavorite ? "primary" : "secondary"}
+                    size="medium"
+                    leftIcon={
+                      actionLoading === "favorites" ? null : (
+                        isMovieFavorite ? (
+                          <X className="h-5 w-5" />
+                        ) : (
+                          <Heart className="h-5 w-5" />
+                        )
+                      )
+                    }
+                    onClick={handleToggleFavorites}
+                    disabled={actionLoading === "favorites" || userStoreLoading}
+                    className={
+                      isMovieFavorite 
+                        ? "bg-red-600 hover:bg-red-700 text-white" 
+                        : "hover:bg-red-600/20 hover:text-red-400 hover:border-red-400"
+                    }
                   >
-                    <Heart className="h-5 w-5" />
-                    <span>Add to Favorites</span>
-                  </button>
+                    {actionLoading === "favorites" ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                        {isMovieFavorite ? "Removing..." : "Adding..."}
+                      </>
+                    ) : isMovieFavorite ? (
+                      "Remove from Favorites"
+                    ) : (
+                      "Add to Favorites"
+                    )}
+                  </Button>
 
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="medium"
+                    leftIcon={<Plus className="h-5 w-5" />}
                     onClick={handleAddToWatchlist}
-                    className="bg-gray-800 hover:bg-gray-700 px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors"
                   >
-                    <Plus className="h-5 w-5" />
-                    <span>Add to Watchlist</span>
-                  </button>
+                    Add to Watchlist
+                  </Button>
 
-                  <button
-                    onClick={handleMarkAsWatched}
-                    className="bg-gray-800 hover:bg-gray-700 px-6 py-3 rounded-lg flex items-center space-x-2 transition-colors"
+                  <Button
+                    variant={isMovieWatched ? "primary" : "secondary"}
+                    size="medium"
+                    leftIcon={
+                      actionLoading === "watched" ? null : (
+                        isMovieWatched ? (
+                          <X className="h-5 w-5" />
+                        ) : (
+                          <Eye className="h-5 w-5" />
+                        )
+                      )
+                    }
+                    onClick={handleToggleWatched}
+                    disabled={actionLoading === "watched" || userStoreLoading}
+                    className={
+                      isMovieWatched 
+                        ? "bg-green-600 hover:bg-green-700 text-white" 
+                        : "hover:bg-green-600/20 hover:text-green-400 hover:border-green-400"
+                    }
                   >
-                    <Eye className="h-5 w-5" />
-                    <span>Mark as Watched</span>
-                  </button>
+                    {actionLoading === "watched" ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                        {isMovieWatched ? "Removing..." : "Adding..."}
+                      </>
+                    ) : isMovieWatched ? (
+                      "Remove from Watched"
+                    ) : (
+                      "Mark as Watched"
+                    )}
+                  </Button>
                 </div>
 
                 {/* Overview */}
