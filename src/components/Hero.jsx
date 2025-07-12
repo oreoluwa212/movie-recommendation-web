@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
-import { Star, Calendar, Play, Info, Film } from "lucide-react";
+import { Star, Calendar, Film } from "lucide-react";
+import MovieActionButtons from "./MovieActionButtons";
+import AuthButtons from "./AuthButtons";
+import { useAuthStore } from "../stores/authStore";
 
 // Hero Section Skeleton
 const HeroSkeleton = () => (
@@ -8,31 +11,22 @@ const HeroSkeleton = () => (
 
     <div className="relative z-10 absolute bottom-0 left-0 w-full p-8">
       <div className="max-w-2xl space-y-4">
-        {/* Title skeleton */}
         <div className="animate-pulse h-12 bg-gray-700 rounded-lg w-3/4" />
-
-        {/* Rating and year skeleton */}
         <div className="flex items-center space-x-4">
           <div className="animate-pulse h-4 bg-gray-700 rounded w-16" />
           <div className="animate-pulse h-4 bg-gray-700 rounded w-12" />
         </div>
-
-        {/* Description skeleton */}
         <div className="space-y-2">
           <div className="animate-pulse h-4 bg-gray-700 rounded w-full" />
           <div className="animate-pulse h-4 bg-gray-700 rounded w-5/6" />
           <div className="animate-pulse h-4 bg-gray-700 rounded w-4/6" />
         </div>
-
-        {/* Buttons skeleton */}
         <div className="flex space-x-4 pt-4">
           <div className="animate-pulse h-12 bg-gray-700 rounded-lg w-32" />
           <div className="animate-pulse h-12 bg-gray-700 rounded-lg w-32" />
         </div>
       </div>
     </div>
-
-    {/* Navigation dots skeleton */}
     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
       {[...Array(3)].map((_, i) => (
         <div
@@ -44,9 +38,10 @@ const HeroSkeleton = () => (
   </div>
 );
 
-const Hero = ({ movies, isLoading = false }) => {
+const Hero = ({ movies, isLoading = false, onMovieSelect }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
+  const { isAuthenticated } = useAuthStore();
 
   useEffect(() => {
     if (movies && movies.length > 0) {
@@ -57,12 +52,10 @@ const Hero = ({ movies, isLoading = false }) => {
     }
   }, [movies]);
 
-  // Reset image error when movie changes
   useEffect(() => {
     setImageError(false);
   }, [currentIndex]);
 
-  // Show skeleton while loading
   if (isLoading) {
     return <HeroSkeleton />;
   }
@@ -74,9 +67,17 @@ const Hero = ({ movies, isLoading = false }) => {
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
             Welcome to StreamVibe
           </h1>
-          <p className="text-xl text-gray-300">
+          <p className="text-xl text-gray-300 mb-8">
             Discover amazing movies and shows
           </p>
+          {!isAuthenticated && (
+            <AuthButtons 
+              size="large" 
+              variant="primary"
+              showIcons={true}
+              className="justify-center"
+            />
+          )}
         </div>
       </div>
     );
@@ -84,41 +85,29 @@ const Hero = ({ movies, isLoading = false }) => {
 
   const movie = movies[currentIndex];
 
-  // Handle both API response formats (backdrop vs backdrop_path, poster vs poster_path)
   const getImageUrl = () => {
-    // Try backdrop first, then poster, handle both API formats
     const backdropUrl = movie.backdrop || movie.backdrop_path;
     const posterUrl = movie.poster || movie.poster_path;
 
     if (backdropUrl) {
-      // If it's already a full URL, use it directly
-      if (backdropUrl.startsWith("http")) {
-        return backdropUrl;
-      }
-      // Otherwise, construct the URL
+      if (backdropUrl.startsWith("http")) return backdropUrl;
       return `https://image.tmdb.org/t/p/w1280${backdropUrl}`;
     }
 
     if (posterUrl) {
-      // If it's already a full URL, use it directly
-      if (posterUrl.startsWith("http")) {
-        return posterUrl;
-      }
-      // Otherwise, construct the URL
+      if (posterUrl.startsWith("http")) return posterUrl;
       return `https://image.tmdb.org/t/p/w1280${posterUrl}`;
     }
 
     return "https://via.placeholder.com/1920x1080/1f2937/9ca3af?text=No+Image";
   };
 
-  // Handle different date formats
   const getReleaseYear = () => {
     const date = movie.releaseDate || movie.release_date;
     if (!date) return null;
     return new Date(date).getFullYear();
   };
 
-  // Handle different rating formats
   const getRating = () => {
     const rating = movie.rating || movie.vote_average;
     return rating ? rating.toFixed(1) : null;
@@ -129,11 +118,52 @@ const Hero = ({ movies, isLoading = false }) => {
   };
 
   const handleWatchNow = () => {
-    console.log("Watch now clicked for:", movie.title);
+    if (onMovieSelect) onMovieSelect(movie);
   };
 
   const handleMoreInfo = () => {
-    console.log("More info clicked for:", movie.title);
+    if (onMovieSelect) onMovieSelect(movie);
+  };
+
+  const handleAddToFavorites = async () => {
+    try {
+      console.log("Adding to favorites:", movie.title);
+    } catch (err) {
+      console.error("Error adding to favorites:", err);
+    }
+  };
+
+  const handleAddToWatchlist = async () => {
+    try {
+      console.log("Adding to watchlist:", movie.title);
+    } catch (err) {
+      console.error("Error adding to watchlist:", err);
+    }
+  };
+
+  const handleMarkAsWatched = async () => {
+    try {
+      console.log("Marking as watched:", movie.title);
+    } catch (err) {
+      console.error("Error marking as watched:", err);
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: movie.title,
+          text: `Check out ${movie.title} on StreamVibe!`,
+          url: window.location.href,
+        });
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        console.log("Link copied to clipboard");
+      }
+    } catch (err) {
+      console.error("Error sharing:", err);
+    }
   };
 
   return (
@@ -154,9 +184,8 @@ const Hero = ({ movies, isLoading = false }) => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
       </div>
 
-      {/* Text positioned at bottom left */}
       <div className="absolute bottom-0 left-0 w-full z-10 px-10 pb-16">
-        <div className="max-w-2xl">
+        <div className="max-w-4xl">
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
             {movie.title}
           </h1>
@@ -176,25 +205,24 @@ const Hero = ({ movies, isLoading = false }) => {
             )}
           </div>
 
-          <p className="text-lg text-gray-300 mb-8 line-clamp-3">
+          <p className="text-lg text-gray-300 mb-8 line-clamp-3 max-w-2xl">
             {movie.overview}
           </p>
 
-          <div className="flex space-x-4">
-            <button
-              onClick={handleWatchNow}
-              className="flex items-center space-x-2 bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition-colors"
-            >
-              <Play className="h-5 w-5" />
-              <span>Watch Now</span>
-            </button>
-            <button
-              onClick={handleMoreInfo}
-              className="flex items-center space-x-2 bg-gray-800/80 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              <Info className="h-5 w-5" />
-              <span>More Info</span>
-            </button>
+          <div className="flex flex-wrap gap-4 mb-4">
+            <MovieActionButtons
+              movie={movie}
+              onWatchNow={handleWatchNow}
+              onMoreInfo={handleMoreInfo}
+              onAddToFavorites={isAuthenticated ? handleAddToFavorites : null}
+              onAddToWatchlist={isAuthenticated ? handleAddToWatchlist : null}
+              onMarkAsWatched={isAuthenticated ? handleMarkAsWatched : null}
+              onShare={handleShare}
+              size="medium"
+              layout="horizontal"
+              showLabels={true}
+              variant="primary"
+            />
           </div>
         </div>
       </div>
