@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Star, Calendar, Film } from "lucide-react";
-import MovieActionButtons from "./MovieActionButtons";
+import { Star, Calendar, Film, Play, Info } from "lucide-react";
+// import Button from "../ui/Button";
 import AuthButtons from "./AuthButtons";
 import { useAuthStore } from "../stores/authStore";
+import Button from "./ui/Button";
 
 // Hero Section Skeleton
 const HeroSkeleton = () => (
@@ -71,8 +72,8 @@ const Hero = ({ movies, isLoading = false, onMovieSelect }) => {
             Discover amazing movies and shows
           </p>
           {!isAuthenticated && (
-            <AuthButtons 
-              size="large" 
+            <AuthButtons
+              size="large"
               variant="primary"
               showIcons={true}
               className="justify-center"
@@ -125,49 +126,9 @@ const Hero = ({ movies, isLoading = false, onMovieSelect }) => {
     if (onMovieSelect) onMovieSelect(movie);
   };
 
-  const handleAddToFavorites = async () => {
-    try {
-      console.log("Adding to favorites:", movie.title);
-    } catch (err) {
-      console.error("Error adding to favorites:", err);
-    }
-  };
-
-  const handleAddToWatchlist = async () => {
-    try {
-      console.log("Adding to watchlist:", movie.title);
-    } catch (err) {
-      console.error("Error adding to watchlist:", err);
-    }
-  };
-
-  const handleMarkAsWatched = async () => {
-    try {
-      console.log("Marking as watched:", movie.title);
-    } catch (err) {
-      console.error("Error marking as watched:", err);
-    }
-  };
-
-  const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: movie.title,
-          text: `Check out ${movie.title} on StreamVibe!`,
-          url: window.location.href,
-        });
-      } else {
-        await navigator.clipboard.writeText(window.location.href);
-        console.log("Link copied to clipboard");
-      }
-    } catch (err) {
-      console.error("Error sharing:", err);
-    }
-  };
-
   return (
     <div className="relative w-full h-[80vh] overflow-hidden">
+      {/* Background Image */}
       <div className="absolute inset-0">
         {!imageError ? (
           <img
@@ -184,12 +145,14 @@ const Hero = ({ movies, isLoading = false, onMovieSelect }) => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
       </div>
 
+      {/* Content */}
       <div className="absolute bottom-0 left-0 w-full z-10 px-10 pb-16">
         <div className="max-w-4xl">
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
             {movie.title}
           </h1>
 
+          {/* Movie Info */}
           <div className="flex items-center space-x-4 mb-4 text-gray-300">
             {getRating() && (
               <div className="flex items-center space-x-1">
@@ -205,28 +168,50 @@ const Hero = ({ movies, isLoading = false, onMovieSelect }) => {
             )}
           </div>
 
+          {/* Overview */}
           <p className="text-lg text-gray-300 mb-8 line-clamp-3 max-w-2xl">
             {movie.overview}
           </p>
 
+          {/* Action Buttons */}
           <div className="flex flex-wrap gap-4 mb-4">
-            <MovieActionButtons
-              movie={movie}
-              onWatchNow={handleWatchNow}
-              onMoreInfo={handleMoreInfo}
-              onAddToFavorites={isAuthenticated ? handleAddToFavorites : null}
-              onAddToWatchlist={isAuthenticated ? handleAddToWatchlist : null}
-              onMarkAsWatched={isAuthenticated ? handleMarkAsWatched : null}
-              onShare={handleShare}
-              size="medium"
-              layout="horizontal"
-              showLabels={true}
+            <Button
+              onClick={handleWatchNow}
               variant="primary"
-            />
+              size="large"
+              leftIcon={<Play className="h-5 w-5" />}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Watch Now
+            </Button>
+            <Button
+              onClick={handleMoreInfo}
+              variant="outline"
+              size="large"
+              leftIcon={<Info className="h-5 w-5" />}
+            >
+              More Info
+            </Button>
           </div>
+
+          {/* Auth Prompt for Non-Authenticated Users */}
+          {!isAuthenticated && (
+            <div className="mt-6 p-4 bg-black/60 rounded-lg border border-gray-700">
+              <p className="text-gray-300 mb-3">
+                Sign in to access your personalized movie experience
+              </p>
+              <AuthButtons
+                size="small"
+                variant="secondary"
+                showIcons={false}
+                className="justify-start"
+              />
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Carousel Indicators */}
       {movies.length > 1 && (
         <div className="absolute bottom-4 right-8 flex space-x-2">
           {movies.map((_, index) => (
