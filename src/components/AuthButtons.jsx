@@ -1,8 +1,8 @@
 // components/AuthButtons.js
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { User, LogIn, UserPlus } from "lucide-react";
 import Button from "./ui/Button";
-import { useAuthStore } from "../stores/authStore";
 
 const AuthButtons = ({
   size = "medium",
@@ -11,10 +11,15 @@ const AuthButtons = ({
   showIcons = true,
   className = "",
 }) => {
-  const { setCurrentView } = useAuthStore();
+  const navigate = useNavigate();
 
-  const handleSignUp = () => setCurrentView("register");
-  const handleSignIn = () => setCurrentView("login");
+  const handleSignUp = () => {
+    navigate('/register');
+  };
+
+  const handleSignIn = () => {
+    navigate('/login');
+  };
 
   const containerClass =
     layout === "vertical"

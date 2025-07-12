@@ -13,13 +13,8 @@ export const useAuthStore = create(
             isAuthenticated: false,
             isLoading: false,
             error: null,
-            currentView: 'home',
 
             // Actions
-            setCurrentView: (view) => {
-                set({ currentView: view, error: null });
-            },
-
             setError: (error) => {
                 set({ error });
             },
@@ -57,8 +52,7 @@ export const useAuthStore = create(
                         token: isEmailVerified ? token : null,
                         isAuthenticated: isEmailVerified, // Only authenticate if email is verified
                         isLoading: false,
-                        error: null,
-                        currentView: isEmailVerified ? 'home' : 'verify-email'
+                        error: null
                     });
 
                     if (isEmailVerified) {
@@ -125,8 +119,7 @@ export const useAuthStore = create(
                         token: needsVerification ? null : token,
                         isAuthenticated: !needsVerification, // Only authenticate if no verification needed
                         isLoading: false,
-                        error: null,
-                        currentView: needsVerification ? 'verify-email' : 'home'
+                        error: null
                     });
 
                     if (needsVerification) {
@@ -170,7 +163,6 @@ export const useAuthStore = create(
                 }
             },
 
-            // FIXED: Updated to send correct parameter names and redirect to login
             verifyEmail: async (email, verificationCode) => {
                 set({ isLoading: true, error: null });
 
@@ -201,8 +193,7 @@ export const useAuthStore = create(
                         user: verifiedUser,
                         token: null, // Don't store token yet - user needs to login
                         isAuthenticated: false, // Don't authenticate yet - redirect to login
-                        isLoading: false,
-                        currentView: 'login' // Set view to login instead of home
+                        isLoading: false
                     });
 
                     toast.success('Email verified successfully! Please login to continue.');
@@ -255,8 +246,7 @@ export const useAuthStore = create(
                     token: null,
                     isAuthenticated: false,
                     isLoading: false,
-                    error: null,
-                    currentView: 'home'
+                    error: null
                 });
 
                 // Clear user data from other stores
