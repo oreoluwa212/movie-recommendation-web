@@ -24,6 +24,7 @@ import { useUserStore } from "../stores/userStore";
 import { ReviewsSection } from "../components/ReviewsSection";
 import { CreateReviewModal } from "../components/CreateReviewModal";
 import { toast } from "react-toastify"; // Add this import
+import WatchlistButton from "../components/WatchlistButton";
 
 const MovieDetails = () => {
   const { id, id: movieId } = useParams();
@@ -122,15 +123,6 @@ const MovieDetails = () => {
       console.error("Error toggling favorites:", err);
     } finally {
       setActionLoading(null);
-    }
-  };
-
-  const handleAddToWatchlist = async () => {
-    try {
-      console.log("Adding to watchlist:", movie.title);
-      // Implement API call here if you have watchlist functionality
-    } catch (err) {
-      console.error("Error adding to watchlist:", err);
     }
   };
 
@@ -387,14 +379,14 @@ const MovieDetails = () => {
                     )}
                   </Button>
 
-                  <Button
+                  <WatchlistButton
+                    movie={movie}
                     variant="secondary"
                     size="medium"
-                    leftIcon={<Plus className="h-5 w-5" />}
-                    onClick={handleAddToWatchlist}
-                  >
-                    Add to Watchlist
-                  </Button>
+                    onSuccess={() => {
+                      console.log("Movie added to watchlist successfully");
+                    }}
+                  />
 
                   <Button
                     variant={isMovieWatched ? "primary" : "secondary"}
