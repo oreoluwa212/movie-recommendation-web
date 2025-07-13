@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { Star, Calendar, Film, Play, Info } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import AuthButtons from "./AuthButtons";
 import { useAuthStore } from "../stores/authStore";
+import { movieApi } from "../utils/api";
 import Button from "./ui/Button";
 
 // Hero Section Skeleton
@@ -9,7 +11,7 @@ const HeroSkeleton = () => (
   <div className="relative h-96 overflow-hidden bg-gray-800">
     <div className="animate-pulse absolute inset-0 bg-gradient-to-r from-gray-800 to-gray-700" />
 
-    <div className="relative z-10 absolute bottom-0 left-0 w-full p-8">
+    <div className="relative z-10 bottom-0 left-0 w-full p-8">
       <div className="max-w-2xl space-y-4">
         <div className="animate-pulse h-12 bg-gray-700 rounded-lg w-3/4" />
         <div className="flex items-center space-x-4">
@@ -38,10 +40,13 @@ const HeroSkeleton = () => (
   </div>
 );
 
-const Hero = ({ movies, isLoading = false, onMovieSelect }) => {
+const Hero = ({ movies, isLoading = false }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
+  const [detailedMovie, setDetailedMovie] = useState(null);
+  const [loadingTrailer, setLoadingTrailer] = useState(false);
   const { isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (movies && movies.length > 0) {
@@ -54,7 +59,24 @@ const Hero = ({ movies, isLoading = false, onMovieSelect }) => {
 
   useEffect(() => {
     setImageError(false);
+    setDetailedMovie(null);
   }, [currentIndex]);
+
+  // Fetch detailed movie data when needed for trailer
+  const fetchMovieDetails = async (movieId) => {
+    try {
+      setLoadingTrailer(true);
+      const response = await movieApi.getMovieDetails(movieId);
+      const movieData = response.data || response;
+      setDetailedMovie(movieData);
+      return movieData;
+    } catch (error) {
+      console.error("Error fetching movie details:", error);
+      return null;
+    } finally {
+      setLoadingTrailer(false);
+    }
+  };
 
   if (isLoading) {
     return <HeroSkeleton />;
@@ -86,8 +108,8 @@ const Hero = ({ movies, isLoading = false, onMovieSelect }) => {
   const movie = movies[currentIndex];
 
   const getImageUrl = () => {
-    const backdropUrl = movie.backdrop || movie.backdrop_path;
-    const posterUrl = movie.poster || movie.poster_path;
+    const backdropUrl = movie.backdrop_path || movie.backdrop;
+    const posterUrl = movie.poster_path || movie.poster;
 
     if (backdropUrl) {
       if (backdropUrl.startsWith("http")) return backdropUrl;
@@ -103,13 +125,13 @@ const Hero = ({ movies, isLoading = false, onMovieSelect }) => {
   };
 
   const getReleaseYear = () => {
-    const date = movie.releaseDate || movie.release_date;
+    const date = movie.release_date || movie.releaseDate;
     if (!date) return null;
     return new Date(date).getFullYear();
   };
 
   const getRating = () => {
-    const rating = movie.rating || movie.vote_average;
+    const rating = movie.vote_average || movie.rating;
     return rating ? rating.toFixed(1) : null;
   };
 
@@ -117,12 +139,30 @@ const Hero = ({ movies, isLoading = false, onMovieSelect }) => {
     setImageError(true);
   };
 
-  const handleWatchNow = () => {
-    if (onMovieSelect) onMovieSelect(movie);
+  const handleWatchTrailer = async () => {
+    // First check if we already have detailed movie data with trailer
+    if (detailedMovie && detailedMovie.trailer) {
+      window.open(detailedMovie.trailer, "_blank");
+      return;
+    }
+
+    // If no detailed data, fetch it
+    const movieDetails = await fetchMovieDetails(movie.id);
+    if (movieDetails && movieDetails.trailer) {
+      window.open(movieDetails.trailer, "_blank");
+    } else {
+      // Fallback: search for trailer on YouTube
+      const searchQuery = `${movie.title} ${getReleaseYear()} trailer`;
+      const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
+        searchQuery
+      )}`;
+      window.open(youtubeUrl, "_blank");
+    }
   };
 
   const handleMoreInfo = () => {
-    if (onMovieSelect) onMovieSelect(movie);
+    // Navigate to movie details page
+    navigate(`/movie/${movie.id}`);
   };
 
   return (
@@ -174,15 +214,24 @@ const Hero = ({ movies, isLoading = false, onMovieSelect }) => {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-4 mb-4">
+            {/* Watch Trailer Button - Always show */}
             <Button
-              onClick={handleWatchNow}
+              onClick={handleWatchTrailer}
               variant="primary"
               size="large"
-              leftIcon={<Play className="h-5 w-5" />}
+              leftIcon={
+                loadingTrailer ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Play className="h-5 w-5" />
+                )
+              }
+              disabled={loadingTrailer}
               className="bg-red-600 hover:bg-red-700"
             >
-              Watch Now
+              {loadingTrailer ? "Loading..." : "Watch Trailer"}
             </Button>
+
             <Button
               onClick={handleMoreInfo}
               variant="outline"

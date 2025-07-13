@@ -147,7 +147,7 @@ export const useMovieStore = create(
       },
 
       // Now playing movies
-      getNowPlayingMovies: async (page = 2) => {
+      getNowPlayingMovies: async (page = 1) => {
         set({ isLoadingNowPlaying: true, error: null });
         console.log('Fetching now playing movies...');
 

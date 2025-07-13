@@ -40,6 +40,7 @@ const MovieCard = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const navigate = useNavigate();
 
   const {
@@ -65,7 +66,7 @@ const MovieCard = ({
 
   const imageUrl = movie.poster || movie.poster_path
     ? movie.poster || `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-    : "https://via.placeholder.com/400x600/1f2937/9ca3af?text=No+Image";
+    : null;
 
   const sizeClasses = {
     small: "w-40",
@@ -144,6 +145,12 @@ const MovieCard = ({
     }
   };
 
+  const handleImageError = (e) => {
+    console.warn('Image failed to load:', e.target.src);
+    setImageError(true);
+    setImageLoaded(true);
+  };
+
   const getReleaseYear = () => {
     const date = movie.releaseDate || movie.release_date;
     if (!date) return null;
@@ -163,20 +170,30 @@ const MovieCard = ({
       onClick={handleMovieClick}
     >
       <div className={`relative ${posterSizeClasses[size]} overflow-hidden rounded-lg bg-gray-800 shadow-lg`}>
-        <img
-          src={imageUrl}
-          alt={movie.title}
-          className={`w-full h-full object-cover transition-all duration-300 ${
-            imageLoaded ? "opacity-100" : "opacity-0"
-          }`}
-          onLoad={() => setImageLoaded(true)}
-          onError={(e) => {
-            e.target.src = "https://via.placeholder.com/400x600/1f2937/9ca3af?text=No+Image";
-            setImageLoaded(true);
-          }}
-        />
+        {imageUrl && !imageError ? (
+          <img
+            src={imageUrl}
+            alt={movie.title}
+            className={`w-full h-full object-cover transition-all duration-300 ${
+              imageLoaded ? "opacity-100" : "opacity-0"
+            }`}
+            onLoad={() => setImageLoaded(true)}
+            onError={handleImageError}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gray-800">
+            <div className="text-center px-4">
+              <div className="text-gray-400 mb-2">
+                <svg className="w-12 h-12 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <p className="text-gray-400 text-xs font-medium">No Image</p>
+            </div>
+          </div>
+        )}
 
-        {!imageLoaded && (
+        {!imageLoaded && imageUrl && !imageError && (
           <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
             <div className="w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
