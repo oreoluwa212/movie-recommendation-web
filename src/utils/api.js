@@ -216,7 +216,7 @@ api.interceptors.response.use(
 // Error handling utility
 function handleApiError(error, context = '') {
     console.error(`API Error in ${context}:`, error);
-    
+
     if (error.response) {
         const status = error.response.status;
         const data = error.response.data;
@@ -411,6 +411,18 @@ export const movieApi = {
         );
     },
 
+    getNowPlayingMovies: async (page = 1) => {
+        const cacheKey = `now-playing-movies-${page}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/movies/discover/now-playing?page=${page}`);
+                return response.data;
+            },
+            cacheKey,
+            'light'
+        );
+    },
+
     getTopRatedMovies: async (page = 1) => {
         const cacheKey = `top-rated-movies-${page}`;
         return makeRequest(
@@ -423,17 +435,6 @@ export const movieApi = {
         );
     },
 
-    getNowPlayingMovies: async (page = 1) => {
-        const cacheKey = `now-playing-movies-${page}`;
-        return makeRequest(
-            async () => {
-                const response = await api.get(`/movies/discover/now-playing?page=${page}`);
-                return response.data;
-            },
-            cacheKey,
-            'light'
-        );
-    },
 
     getUpcomingMovies: async (page = 1) => {
         const cacheKey = `upcoming-movies-${page}`;
@@ -973,7 +974,6 @@ export const watchlistsApi = {
         );
     }
 };
-
 
 // Utility functions for cache and queue management
 export const cacheUtils = {

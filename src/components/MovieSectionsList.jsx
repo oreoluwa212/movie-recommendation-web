@@ -22,20 +22,7 @@ const MovieSectionsList = ({
       title: `Recommended for ${user?.username || "You"}`,
       viewAllLink: "/movies/recommendations",
       condition: isAuthenticated,
-    },
-    {
-      key: "trending",
-      title: "Trending Now",
-      viewAllLink: "/movies/trending",
-      condition: !!getTrendingMovies,
-      globalLoading: isLoadingTrending,
-    },
-    {
-      key: "popular",
-      title: "Popular Movies",
-      viewAllLink: "/movies/popular",
-      condition: true,
-      globalLoading: isLoadingPopular,
+      globalLoading: isLoadingNowPlaying,
     },
     {
       key: "nowPlaying",
@@ -45,11 +32,25 @@ const MovieSectionsList = ({
       globalLoading: isLoadingNowPlaying,
     },
     {
+      key: "trending",
+      title: "Trending Now",
+      viewAllLink: "/movies/trending",
+      condition: !!getTrendingMovies,
+      globalLoading: isLoadingTrending,
+    },
+    {
       key: "topRated",
       title: "Top Rated Movies",
       viewAllLink: "/movies/top-rated",
       condition: true,
       globalLoading: isLoadingTopRated,
+    },
+    {
+      key: "popular",
+      title: "Popular Movies",
+      viewAllLink: "/movies/popular",
+      condition: true,
+      globalLoading: isLoadingPopular,
     },
     {
       key: "upcoming",
