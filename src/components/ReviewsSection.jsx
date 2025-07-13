@@ -113,8 +113,8 @@ const UserAvatar = ({ user, size = "medium" }) => {
 // Review Card Component
 const ReviewCard = ({ review, onLike, onEdit, onDelete }) => {
   // Get current user from store
-  const { user: currentUser } = useAuthStore();
-  const currentUserId = currentUser?.id;
+  const { user: currentUser, isAuthenticated } = useAuthStore();
+  const currentUserId = currentUser?.id || currentUser?._id;
 
   // Fix: Use 'user' field instead of 'userId' for reports
   const isReported = review.reports?.some(
@@ -136,6 +136,12 @@ const ReviewCard = ({ review, onLike, onEdit, onDelete }) => {
   const likeCount = review.likes?.length || 0;
 
   const handleLike = async () => {
+    // Check if user is authenticated
+    if (!isAuthenticated || !currentUser) {
+      toast.error("Please sign in to like reviews");
+      return;
+    }
+
     if (isLiking) return;
     setIsLiking(true);
     try {
@@ -178,6 +184,12 @@ const ReviewCard = ({ review, onLike, onEdit, onDelete }) => {
   };
 
   const handleReportClick = () => {
+    // Check if user is authenticated
+    if (!isAuthenticated || !currentUser) {
+      toast.error("Please sign in to report reviews");
+      return;
+    }
+
     if (isOwner) {
       toast.info("You cannot report your own review.");
       return;
@@ -491,6 +503,9 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 
 // Main Reviews Section Component
 export const ReviewsSection = ({ movieId, onCreateReview }) => {
+  // Get current user from store
+  const { user: currentUser, isAuthenticated } = useAuthStore();
+  
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -583,6 +598,16 @@ export const ReviewsSection = ({ movieId, onCreateReview }) => {
     loadReviews(page);
   };
 
+  // Handle create review with authentication check
+  const handleCreateReview = (editData = null) => {
+    if (!isAuthenticated || !currentUser) {
+      toast.error("Please sign in to write a review");
+      return;
+    }
+    
+    onCreateReview(editData);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -605,7 +630,7 @@ export const ReviewsSection = ({ movieId, onCreateReview }) => {
         <h2 className="text-white text-2xl font-bold">Reviews</h2>
         <Button
           variant="primary"
-          onClick={onCreateReview}
+          onClick={() => handleCreateReview()}
           leftIcon={<Plus className="w-4 h-4" />}
         >
           Write Review
@@ -631,7 +656,7 @@ export const ReviewsSection = ({ movieId, onCreateReview }) => {
             </p>
             <Button
               variant="primary"
-              onClick={onCreateReview}
+              onClick={() => handleCreateReview()}
               leftIcon={<Plus className="w-4 h-4" />}
             >
               Write the First Review
