@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { movieApi } from "../utils/api";
 import MovieSection from "../components/MovieSection";
+import ReviewsSection from "../components/ReviewsSection"; // Add this import
 import Button from "../components/ui/Button";
 import { useUserStore } from "../stores/userStore";
 
@@ -417,6 +418,7 @@ const MovieDetails = () => {
             {[
               { id: "overview", label: "Details" },
               { id: "cast", label: "Cast & Crew" },
+              { id: "reviews", label: "Reviews" }, // Add Reviews tab
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -604,6 +606,14 @@ const MovieDetails = () => {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Reviews Tab Content */}
+          {activeTab === "reviews" && (
+            <ReviewsSection 
+              movieId={id} 
+              movieTitle={movie.title}
+            />
           )}
         </div>
       </div>
