@@ -62,7 +62,6 @@ class APICache {
     }
 }
 
-// Request queue for rate limiting
 class RequestQueue {
     constructor(maxConcurrent = 2, delay = 1000) {
         this.queue = [];
@@ -110,34 +109,48 @@ const requestQueue = new RequestQueue(5, 100);
 const heavyQueue = new RequestQueue(2, 500);
 const ongoingRequests = new Map();
 
-// Storage utility to handle different environments
+// In-memory storage for Claude.ai compatibility (no localStorage)
+let memoryStorage = {};
+
+// Storage utility that works in all environments
 const storage = {
     getItem: (key) => {
         try {
-            return typeof window !== 'undefined' && window.localStorage
-                ? localStorage.getItem(key)
-                : null;
-        } catch (error) {
-            console.warn('localStorage not available:', error);
-            return null;
+            // Try localStorage first if available
+            if (typeof window !== 'undefined' && window.localStorage) {
+                return localStorage.getItem(key);
+            }
+            // Fallback to memory storage
+            return memoryStorage[key] || null;
+        } catch {
+            // Fallback to memory storage if localStorage fails
+            return memoryStorage[key] || null;
         }
     },
     setItem: (key, value) => {
         try {
+            // Try localStorage first if available
             if (typeof window !== 'undefined' && window.localStorage) {
                 localStorage.setItem(key, value);
             }
-        } catch (error) {
-            console.warn('localStorage not available:', error);
+            // Always store in memory as backup
+            memoryStorage[key] = value;
+        } catch {
+            // Fallback to memory storage if localStorage fails
+            memoryStorage[key] = value;
         }
     },
     removeItem: (key) => {
         try {
+            // Try localStorage first if available
             if (typeof window !== 'undefined' && window.localStorage) {
                 localStorage.removeItem(key);
             }
-        } catch (error) {
-            console.warn('localStorage not available:', error);
+            // Always remove from memory
+            delete memoryStorage[key];
+        } catch {
+            // Fallback to memory storage if localStorage fails
+            delete memoryStorage[key];
         }
     }
 };
@@ -159,11 +172,9 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
-        console.log('🚀 Making API request:', config.method?.toUpperCase(), config.url);
         return config;
     },
     (error) => {
-        console.error('❌ Request interceptor error:', error);
         return Promise.reject(error);
     }
 );
@@ -171,12 +182,9 @@ api.interceptors.request.use(
 // Enhanced response interceptor
 api.interceptors.response.use(
     (response) => {
-        console.log('✅ API response received:', response.config.url, response.status);
         return response;
     },
     async (error) => {
-        console.error('❌ API error:', error.config?.url, error.response?.status, error.message);
-
         const originalRequest = error.config;
 
         // Handle 429 errors with exponential backoff
@@ -188,8 +196,6 @@ api.interceptors.response.use(
                 originalRequest._retryCount++;
                 const delay = Math.pow(2, originalRequest._retryCount) * 1000 + Math.random() * 1000;
 
-                console.log(`🔄 Rate limited. Retrying in ${delay}ms... (Attempt ${originalRequest._retryCount}/3)`);
-
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return api(originalRequest);
             }
@@ -197,7 +203,6 @@ api.interceptors.response.use(
 
         // Handle 401 errors (unauthorized)
         if (error.response?.status === 401) {
-            console.log('🔒 Unauthorized request - clearing auth data');
             storage.removeItem('authToken');
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('auth-logout'));
@@ -210,8 +215,8 @@ api.interceptors.response.use(
 
 // Error handling utility
 function handleApiError(error, context = '') {
-    console.error(`API Error${context ? ` (${context})` : ''}:`, error);
-
+    console.error(`API Error in ${context}:`, error);
+    
     if (error.response) {
         const status = error.response.status;
         const data = error.response.data;
@@ -245,14 +250,12 @@ const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
     if (cacheKey) {
         const cachedData = apiCache.get(cacheKey);
         if (cachedData) {
-            console.log(`📦 Using cached data for ${cacheKey}`);
             return cachedData;
         }
     }
 
     // Check for ongoing requests
     if (cacheKey && ongoingRequests.has(cacheKey)) {
-        console.log(`⏳ Waiting for ongoing request: ${cacheKey}`);
         return ongoingRequests.get(cacheKey);
     }
 
@@ -299,21 +302,16 @@ const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
 export const authApi = {
     register: async (userData) => {
         try {
-            console.log('🔐 AuthAPI: Starting registration');
             const response = await api.post('/auth/register', userData);
-            console.log('🔐 AuthAPI: Registration successful');
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Registration failed:', error.response?.data);
             handleApiError(error, 'register');
         }
     },
 
     login: async (credentials) => {
         try {
-            console.log('🔐 AuthAPI: Starting login');
             const response = await api.post('/auth/login', credentials);
-            console.log('🔐 AuthAPI: Login successful');
 
             if (response.data.token) {
                 storage.setItem('authToken', response.data.token);
@@ -321,16 +319,13 @@ export const authApi = {
 
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Login failed:', error.response?.data);
             handleApiError(error, 'login');
         }
     },
 
     verifyEmail: async (verificationData) => {
         try {
-            console.log('🔐 AuthAPI: Starting email verification');
             const response = await api.post('/auth/verify-email', verificationData);
-            console.log('🔐 AuthAPI: Email verification successful');
 
             if (response.data.token) {
                 storage.setItem('authToken', response.data.token);
@@ -338,19 +333,15 @@ export const authApi = {
 
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Email verification failed:', error.response?.data);
             handleApiError(error, 'verifyEmail');
         }
     },
 
     resendVerificationCode: async (emailData) => {
         try {
-            console.log('🔐 AuthAPI: Resending verification code');
             const response = await api.post('/auth/resend-verification-code', emailData);
-            console.log('🔐 AuthAPI: Verification code resent successfully');
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Resend verification failed:', error.response?.data);
             handleApiError(error, 'resendVerificationCode');
         }
     },
@@ -358,22 +349,17 @@ export const authApi = {
     getCurrentUser: async () => {
         try {
             const response = await api.get('/auth/me');
-            console.log('🔐 AuthAPI: Current user retrieved');
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Get current user failed:', error.response?.data);
             handleApiError(error, 'getCurrentUser');
         }
     },
 
     updateProfile: async (userData) => {
         try {
-            console.log('🔐 AuthAPI: Updating profile');
             const response = await api.put('/auth/profile', userData);
-            console.log('🔐 AuthAPI: Profile updated successfully');
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Profile update failed:', error.response?.data);
             handleApiError(error, 'updateProfile');
         }
     },
@@ -381,7 +367,6 @@ export const authApi = {
     refreshToken: async () => {
         try {
             const response = await api.post('/auth/refresh');
-            console.log('🔐 AuthAPI: Token refreshed successfully');
 
             if (response.data.token) {
                 storage.setItem('authToken', response.data.token);
@@ -389,7 +374,6 @@ export const authApi = {
 
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Token refresh failed:', error.response?.data);
             handleApiError(error, 'refreshToken');
         }
     },
@@ -397,8 +381,6 @@ export const authApi = {
     logout: async () => {
         try {
             await api.post('/auth/logout');
-        } catch (error) {
-            console.error('🔐 AuthAPI: Logout endpoint failed:', error.message);
         } finally {
             storage.removeItem('authToken');
             apiCache.clear();
@@ -567,14 +549,11 @@ export const movieApi = {
 
     filterMovies: async (queryParams) => {
         const url = `/movies/filter${queryParams ? `?${queryParams}` : ''}`;
-        console.log('Filtering movies with URL:', url);
 
         try {
             const response = await api.get(url);
-            console.log('Filter response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('Filter movies error:', error);
             handleApiError(error, 'filterMovies');
         }
     },
@@ -751,7 +730,6 @@ export const reviewsApi = {
             clearReviewCaches(reviewData.movieId);
             return response.data;
         } catch (error) {
-            console.error('Save review error:', error);
             handleApiError(error, 'createOrUpdateReview');
         }
     },
@@ -775,7 +753,6 @@ export const reviewsApi = {
             clearReviewCaches(reviewData.movieId);
             return response.data;
         } catch (error) {
-            console.error('Update review error:', error);
             handleApiError(error, 'updateReview');
         }
     },
@@ -821,7 +798,6 @@ export const reviewsApi = {
 
             return response.data;
         } catch (error) {
-            console.error('Delete review error:', error);
             handleApiError(error, 'deleteReview');
         }
     },
@@ -872,7 +848,6 @@ export const reviewsApi = {
             });
             return response.data;
         } catch (error) {
-            console.error('Report review error:', error);
             handleApiError(error, 'reportReview');
         }
     },
@@ -890,7 +865,6 @@ export const reviewsApi = {
 
             return response.data;
         } catch (error) {
-            console.error('Toggle like error:', error);
             handleApiError(error, 'toggleLikeReview');
         }
     },
@@ -1000,11 +974,11 @@ export const watchlistsApi = {
     }
 };
 
+
 // Utility functions for cache and queue management
 export const cacheUtils = {
     clearCache: () => {
         apiCache.clear();
-        console.log('API cache cleared');
     },
 
     clearCacheByPattern: (pattern) => {
@@ -1014,7 +988,6 @@ export const cacheUtils = {
                 apiCache.cache.delete(key);
             }
         });
-        console.log(`Cache cleared for pattern: ${pattern}`);
     },
 
     // New utility to check queue status

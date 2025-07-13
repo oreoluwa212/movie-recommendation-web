@@ -91,13 +91,15 @@ const MovieCard = ({
     try {
       if (movieIsFavorite) {
         await removeFromFavorites(movie.id);
-        toast.success(`${movie.title} removed from favorites`);
+        // Only show toast if store action doesn't handle it
+        // toast.success(`${movie.title} removed from favorites`);
       } else {
         await addToFavorites(movie);
+        // Only show toast if store action doesn't handle it
+        // toast.success(`${movie.title} added to favorites`);
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to update favorites');
-      console.error('Error updating favorites:', error);
     }
   };
 
@@ -109,13 +111,13 @@ const MovieCard = ({
       if (watchlists.length > 0) {
         const firstWatchlist = watchlists[0];
         await addMovieToWatchlist(firstWatchlist.id, movie);
-        toast.success(`${movie.title} added to watchlist`);
+        // Only show toast if store action doesn't handle it
+        // toast.success(`${movie.title} added to watchlist`);
       } else {
         toast.info('Please create a watchlist first');
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to add to watchlist');
-      console.error('Error adding to watchlist:', error);
     }
   };
 
@@ -126,13 +128,15 @@ const MovieCard = ({
     try {
       if (movieIsWatched) {
         await removeFromWatched(movie.id);
-        toast.success(`${movie.title} removed from watched`);
+        // Only show toast if store action doesn't handle it
+        // toast.success(`${movie.title} removed from watched`);
       } else {
         await addToWatched(movie);
+        // Only show toast if store action doesn't handle it
+        // toast.success(`${movie.title} marked as watched`);
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to update watched status');
-      console.error('Error updating watched status:', error);
     }
   };
 
@@ -145,8 +149,7 @@ const MovieCard = ({
     }
   };
 
-  const handleImageError = (e) => {
-    console.warn('Image failed to load:', e.target.src);
+  const handleImageError = () => {
     setImageError(true);
     setImageLoaded(true);
   };

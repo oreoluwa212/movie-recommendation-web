@@ -3,6 +3,22 @@ import { persist } from 'zustand/middleware';
 import { toast } from 'react-toastify';
 import { movieApi } from '../utils/api';
 
+// Development flag - set to false in production
+const isDevelopment = import.meta.env.NODE_ENV === 'development';
+
+// Debug logger utility
+const debugLog = (message, data = null) => {
+  if (isDevelopment) {
+    console.log(message, data);
+  }
+};
+
+const debugError = (message, error = null) => {
+  if (isDevelopment) {
+    console.error(message, error);
+  }
+};
+
 export const useMovieStore = create(
   persist(
     (set, get) => ({
@@ -35,7 +51,7 @@ export const useMovieStore = create(
       setError: (error) => {
         set({ error });
         if (error) {
-          console.error('Movie Store Error:', error);
+          debugError('Movie Store Error:', error);
         }
       },
       clearError: () => {
@@ -50,11 +66,11 @@ export const useMovieStore = create(
         }
 
         set({ isLoadingSearch: true, error: null, searchQuery: query });
-        console.log('Searching for:', query);
+        debugLog('Searching for:', query);
 
         try {
           const response = await movieApi.searchMovies(query, page);
-          console.log('Search response:', response);
+          debugLog('Search response:', response);
 
           // Handle different response structures
           let results = [];
@@ -68,14 +84,14 @@ export const useMovieStore = create(
             results = response.data.results || response.data.movies || response.data;
           }
 
-          console.log('Search results:', results);
+          debugLog('Search results:', results);
           set({
             searchResults: results,
             isLoadingSearch: false
           });
           return results;
         } catch (error) {
-          console.error('Search error:', error);
+          debugError('Search error:', error);
           set({ isLoadingSearch: false, error: error.message || 'Search failed' });
           toast.error(error.message || 'Search failed');
           throw error;
@@ -85,11 +101,11 @@ export const useMovieStore = create(
       // Genres
       getGenres: async () => {
         set({ isLoadingGenres: true, error: null });
-        console.log('Fetching genres...');
+        debugLog('Fetching genres...');
 
         try {
           const response = await movieApi.getGenres();
-          console.log('Genres response:', response);
+          debugLog('Genres response:', response);
 
           let genres = [];
           if (response.genres) {
@@ -100,11 +116,11 @@ export const useMovieStore = create(
             genres = response.data.genres || response.data;
           }
 
-          console.log('Processed genres:', genres);
+          debugLog('Processed genres:', genres);
           set({ genres, isLoadingGenres: false });
           return genres;
         } catch (error) {
-          console.error('Genres error:', error);
+          debugError('Genres error:', error);
           set({ isLoadingGenres: false, error: error.message });
           toast.error(error.message || 'Failed to fetch genres');
           throw error;
@@ -114,11 +130,11 @@ export const useMovieStore = create(
       // Popular movies
       getPopularMovies: async (page = 1) => {
         set({ isLoadingPopular: true, error: null });
-        console.log('Fetching popular movies...');
+        debugLog('Fetching popular movies...');
 
         try {
           const response = await movieApi.getPopularMovies(page);
-          console.log('Popular movies response:', response);
+          debugLog('Popular movies response:', response);
 
           // Handle different response structures
           let results = [];
@@ -132,14 +148,14 @@ export const useMovieStore = create(
             results = response.data.results || response.data.movies || response.data;
           }
 
-          console.log('Popular movies processed:', results);
+          debugLog('Popular movies processed:', results);
           set({
             popularMovies: results,
             isLoadingPopular: false
           });
           return results;
         } catch (error) {
-          console.error('Popular movies error:', error);
+          debugError('Popular movies error:', error);
           set({ isLoadingPopular: false, error: error.message });
           toast.error(error.message || 'Failed to fetch popular movies');
           throw error;
@@ -149,11 +165,10 @@ export const useMovieStore = create(
       // Now playing movies
       getNowPlayingMovies: async (page = 1) => {
         set({ isLoadingNowPlaying: true, error: null });
-        console.log('Fetching now playing movies...');
 
         try {
           const response = await movieApi.getNowPlayingMovies(page);
-          console.log('Now playing movies response:', response);
+          debugLog('Now playing movies response:', response);
 
           let results = [];
           if (response.results) {
@@ -166,14 +181,14 @@ export const useMovieStore = create(
             results = response.data.results || response.data.movies || response.data;
           }
 
-          console.log('Now playing movies processed:', results);
+          debugLog('Now playing movies processed:', results);
           set({
             nowPlayingMovies: results,
             isLoadingNowPlaying: false
           });
           return results;
         } catch (error) {
-          console.error('Now playing movies error:', error);
+          debugError('Now playing movies error:', error);
           set({ isLoadingNowPlaying: false, error: error.message });
           toast.error(error.message || 'Failed to fetch now playing movies');
           throw error;
@@ -183,11 +198,11 @@ export const useMovieStore = create(
       // Top rated movies
       getTopRatedMovies: async (page = 1) => {
         set({ isLoadingTopRated: true, error: null });
-        console.log('Fetching top rated movies...');
+        debugLog('Fetching top rated movies...');
 
         try {
           const response = await movieApi.getTopRatedMovies(page);
-          console.log('Top rated movies response:', response);
+          debugLog('Top rated movies response:', response);
 
           let results = [];
           if (response.results) {
@@ -200,14 +215,14 @@ export const useMovieStore = create(
             results = response.data.results || response.data.movies || response.data;
           }
 
-          console.log('Top rated movies processed:', results);
+          debugLog('Top rated movies processed:', results);
           set({
             topRatedMovies: results,
             isLoadingTopRated: false
           });
           return results;
         } catch (error) {
-          console.error('Top rated movies error:', error);
+          debugError('Top rated movies error:', error);
           set({ isLoadingTopRated: false, error: error.message });
           toast.error(error.message || 'Failed to fetch top rated movies');
           throw error;
@@ -217,11 +232,11 @@ export const useMovieStore = create(
       // Upcoming movies
       getUpcomingMovies: async (page = 1) => {
         set({ isLoadingUpcoming: true, error: null });
-        console.log('Fetching upcoming movies...');
+        debugLog('Fetching upcoming movies...');
 
         try {
           const response = await movieApi.getUpcomingMovies(page);
-          console.log('Upcoming movies response:', response);
+          debugLog('Upcoming movies response:', response);
 
           let results = [];
           if (response.results) {
@@ -234,14 +249,14 @@ export const useMovieStore = create(
             results = response.data.results || response.data.movies || response.data;
           }
 
-          console.log('Upcoming movies processed:', results);
+          debugLog('Upcoming movies processed:', results);
           set({
             upcomingMovies: results,
             isLoadingUpcoming: false
           });
           return results;
         } catch (error) {
-          console.error('Upcoming movies error:', error);
+          debugError('Upcoming movies error:', error);
           set({ isLoadingUpcoming: false, error: error.message });
           toast.error(error.message || 'Failed to fetch upcoming movies');
           throw error;
@@ -251,23 +266,23 @@ export const useMovieStore = create(
       // Initialize featured movies
       initializeFeaturedMovies: async () => {
         try {
-          console.log('Initializing featured movies...');
+          debugLog('Initializing featured movies...');
           const { popularMovies } = get();
 
           if (popularMovies && popularMovies.length > 0) {
-            console.log('Using existing popular movies for featured');
+            debugLog('Using existing popular movies for featured');
             set({ featuredMovies: popularMovies.slice(0, 5) });
             return;
           }
 
-          console.log('Fetching popular movies for featured');
+          debugLog('Fetching popular movies for featured');
           const movies = await get().getPopularMovies();
           if (movies && movies.length > 0) {
             set({ featuredMovies: movies.slice(0, 5) });
-            console.log('Featured movies set:', movies.slice(0, 5));
+            debugLog('Featured movies set:', movies.slice(0, 5));
           }
         } catch (error) {
-          console.error('Featured movies initialization error:', error);
+          debugError('Featured movies initialization error:', error);
           set({ featuredMovies: [] });
         }
       },
@@ -275,7 +290,7 @@ export const useMovieStore = create(
       // Initialize app data
       initializeAppData: async () => {
         try {
-          console.log('🎬 Initializing app data...');
+          debugLog('🎬 Initializing app data...');
           set({ isLoading: true });
 
           // First get genres
@@ -295,11 +310,11 @@ export const useMovieStore = create(
           await get().initializeFeaturedMovies();
 
           set({ isLoading: false });
-          console.log('✅ App data initialized successfully');
+          debugLog('✅ App data initialized successfully');
 
           // Log current state for debugging
           const state = get();
-          console.log('Current state:', {
+          debugLog('Current state:', {
             popularMovies: state.popularMovies.length,
             topRatedMovies: state.topRatedMovies.length,
             nowPlayingMovies: state.nowPlayingMovies.length,
@@ -309,7 +324,7 @@ export const useMovieStore = create(
           });
 
         } catch (error) {
-          console.error('❌ Failed to initialize app data:', error);
+          debugError('❌ Failed to initialize app data:', error);
           set({ error: error.message, isLoading: false });
           toast.error('Failed to load movie data. Please refresh the page.');
         }
@@ -368,10 +383,12 @@ export const useMovieStore = create(
           .filter(Boolean);
       },
 
-      // Debug method to check current state
+      // Debug method to check current state (only available in development)
       debugState: () => {
+        if (!isDevelopment) return null;
+        
         const state = get();
-        console.log('🔍 Movie Store Debug State:', {
+        const debugInfo = {
           popularMovies: state.popularMovies.length,
           topRatedMovies: state.topRatedMovies.length,
           nowPlayingMovies: state.nowPlayingMovies.length,
@@ -389,8 +406,10 @@ export const useMovieStore = create(
             genres: state.isLoadingGenres,
             search: state.isLoadingSearch
           }
-        });
-        return state;
+        };
+        
+        debugLog('🔍 Movie Store Debug State:', debugInfo);
+        return debugInfo;
       }
     }),
     {
@@ -405,7 +424,7 @@ export const useMovieStore = create(
         featuredMovies: state.featuredMovies
       }),
       onRehydrateStorage: () => (state) => {
-        console.log('🔄 Rehydrating movie store...');
+        debugLog('🔄 Rehydrating movie store...');
         if (state) {
           // Always initialize app data on rehydration to ensure fresh data
           setTimeout(() => {

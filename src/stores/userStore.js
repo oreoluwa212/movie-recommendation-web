@@ -234,7 +234,6 @@ export const useUserStore = create(
 
                 // Check for existing promise
                 if (requestCache.has(cacheKey)) {
-                    console.log('⏳ Initialization already in progress, waiting...');
                     return await requestCache.get(cacheKey);
                 }
 
@@ -253,8 +252,6 @@ export const useUserStore = create(
                             initializationError: null
                         });
 
-                        console.log('🚀 Initializing user store...');
-
                         // Load minimal profile first
                         const response = await apiClient.get('/users/profile/minimal');
 
@@ -268,13 +265,11 @@ export const useUserStore = create(
                                 error: null
                             });
 
-                            console.log('✅ User store initialized successfully');
                             return { success: true, data: response.data.user };
                         } else {
                             throw new Error(response.data.message || 'Invalid response from server');
                         }
                     } catch (error) {
-                        console.error('❌ User store initialization failed:', error);
                         const errorMessage = getUserFriendlyError(error, 'initialize your profile');
 
                         set({
@@ -434,7 +429,6 @@ export const useUserStore = create(
                     } catch (error) {
                         const errorMessage = getUserFriendlyError(error, 'load your profile');
                         set({ isLoading: false, error: errorMessage });
-                        console.error('Load profile failed:', errorMessage);
                         throw error;
                     } finally {
                         requestCache.delete(cacheKey);
@@ -499,7 +493,6 @@ export const useUserStore = create(
                     } catch (error) {
                         const errorMessage = getUserFriendlyError(error, 'sync your data');
                         set({ isLoading: false, error: errorMessage });
-                        console.error('Sync failed:', errorMessage);
                         throw error;
                     } finally {
                         requestCache.delete(cacheKey);
@@ -653,7 +646,6 @@ export const useUserStore = create(
 
                     const errorMessage = getUserFriendlyError(error, 'add to favorites');
                     toastManager.error(errorMessage);
-                    console.error('Add to favorites failed:', error);
                     return { success: false, error: errorMessage };
                 }
             },
@@ -710,7 +702,6 @@ export const useUserStore = create(
 
                     const errorMessage = getUserFriendlyError(error, 'remove from favorites');
                     toastManager.error(errorMessage);
-                    console.error('Remove from favorites failed:', error);
                     return { success: false, error: errorMessage };
                 }
             },
@@ -783,7 +774,6 @@ export const useUserStore = create(
 
                     const errorMessage = getUserFriendlyError(error, 'add to watched list');
                     toastManager.error(errorMessage);
-                    console.error('Add to watched failed:', error);
                     return { success: false, error: errorMessage };
                 }
             },
@@ -846,7 +836,6 @@ export const useUserStore = create(
 
                     const errorMessage = getUserFriendlyError(error, 'remove from watched list');
                     toastManager.error(errorMessage);
-                    console.error('Remove from watched failed:', error);
                     return { success: false, error: errorMessage };
                 }
             },
