@@ -386,7 +386,7 @@ export const useMovieStore = create(
       // Debug method to check current state (only available in development)
       debugState: () => {
         if (!isDevelopment) return null;
-        
+
         const state = get();
         const debugInfo = {
           popularMovies: state.popularMovies.length,
@@ -407,7 +407,7 @@ export const useMovieStore = create(
             search: state.isLoadingSearch
           }
         };
-        
+
         debugLog('🔍 Movie Store Debug State:', debugInfo);
         return debugInfo;
       }

@@ -214,7 +214,6 @@ const MovieDetails = () => {
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-4">Error Loading Movie</h2>
-          <p className="text-gray-400 mb-6">{error}</p>
           <Button variant="primary" size="medium" onClick={() => navigate("/")}>
             Go Home
           </Button>
