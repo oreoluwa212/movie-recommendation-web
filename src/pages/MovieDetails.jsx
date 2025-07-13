@@ -15,15 +15,19 @@ import {
   DollarSign,
   Check,
   X,
+  User,
 } from "lucide-react";
-import { movieApi } from "../utils/api";
+import { movieApi, reviewsApi } from "../utils/api";
 import MovieSection from "../components/MovieSection";
-import ReviewsSection from "../components/ReviewsSection"; // Add this import
 import Button from "../components/ui/Button";
 import { useUserStore } from "../stores/userStore";
+import { ReviewsSection } from "../components/ReviewsSection";
+import { CreateReviewModal } from "../components/CreateReviewModal";
+import { toast } from "react-toastify"; // Add this import
 
 const MovieDetails = () => {
-  const { id } = useParams();
+  const { id, id: movieId } = useParams();
+  const user = useUserStore((state) => state.user);
   const navigate = useNavigate();
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -33,7 +37,10 @@ const MovieDetails = () => {
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [similarMoviesLoading, setSimilarMoviesLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
-  const [actionLoading, setActionLoading] = useState(null); // Track which action is loading
+  const [actionLoading, setActionLoading] = useState(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [editData, setEditData] = useState(null);
+  const [reviewsKey, setReviewsKey] = useState(0);
 
   // Get user store methods and state
   const {
@@ -54,7 +61,6 @@ const MovieDetails = () => {
 
         // Fetch movie details
         const movieResponse = await movieApi.getMovieDetails(id);
-        // Handle the nested data structure from your API
         const movieData = movieResponse.data || movieResponse;
         setMovie(movieData);
 
@@ -106,7 +112,7 @@ const MovieDetails = () => {
     setActionLoading("favorites");
     try {
       const isMovieFavorite = isFavorite(movie.id);
-      
+
       if (isMovieFavorite) {
         await removeFromFavorites(movie.id);
       } else {
@@ -120,8 +126,6 @@ const MovieDetails = () => {
   };
 
   const handleAddToWatchlist = async () => {
-    // Note: This would be for a separate watchlist functionality
-    // if you have it in your store. For now, I'll keep the console.log
     try {
       console.log("Adding to watchlist:", movie.title);
       // Implement API call here if you have watchlist functionality
@@ -136,7 +140,7 @@ const MovieDetails = () => {
     setActionLoading("watched");
     try {
       const isMovieWatched = isWatched(movie.id);
-      
+
       if (isMovieWatched) {
         await removeFromWatched(movie.id);
       } else {
@@ -157,6 +161,33 @@ const MovieDetails = () => {
     if (movie.trailer) {
       window.open(movie.trailer, "_blank");
     }
+  };
+
+  // Fixed function to handle review creation/editing
+  const handleCreateReview = (reviewData = null) => {
+    if (reviewData) {
+      // If reviewData is provided, we're editing
+      setEditData(reviewData);
+    } else {
+      // If no reviewData, we're creating a new review
+      setEditData(null);
+    }
+    setIsReviewModalOpen(true);
+  };
+
+  const handleReviewCreated = () => {
+    setActiveTab("reviews");
+    setReviewsKey((prev) => prev + 1);
+    setIsReviewModalOpen(false);
+    setEditData(null); // Clear edit data after successful creation/update
+
+    // Show success toast
+    toast.success("Review saved successfully!");
+  };
+
+  const handleModalClose = () => {
+    setIsReviewModalOpen(false);
+    setEditData(null); // Clear edit data when modal closes
   };
 
   const retryRecommendations = () => {
@@ -200,11 +231,9 @@ const MovieDetails = () => {
     );
   }
 
-  // Handle the new API response format
+  // Handle the API response format
   const backdropUrl = movie.backdrop || null;
-  const posterUrl =
-    movie.poster ||
-    "https://via.placeholder.com/500x750/1f2937/9ca3af?text=No+Image";
+  const posterUrl = movie.poster || null;
   const releaseYear = movie.releaseDate
     ? new Date(movie.releaseDate).getFullYear()
     : null;
@@ -249,11 +278,19 @@ const MovieDetails = () => {
             <div className="flex flex-col lg:flex-row gap-8">
               {/* Movie Poster */}
               <div className="flex-shrink-0">
-                <img
-                  src={posterUrl}
-                  alt={movie.title}
-                  className="w-80 h-auto rounded-lg shadow-2xl mx-auto lg:mx-0"
-                />
+                <div className="w-80 h-auto bg-gray-800 rounded-lg shadow-2xl mx-auto lg:mx-0 flex items-center justify-center overflow-hidden">
+                  {posterUrl ? (
+                    <img
+                      src={posterUrl}
+                      alt={movie.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-96 flex items-center justify-center text-gray-500 text-lg">
+                      No Poster Available
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Movie Info */}
@@ -325,19 +362,17 @@ const MovieDetails = () => {
                     variant={isMovieFavorite ? "primary" : "secondary"}
                     size="medium"
                     leftIcon={
-                      actionLoading === "favorites" ? null : (
-                        isMovieFavorite ? (
-                          <X className="h-5 w-5" />
-                        ) : (
-                          <Heart className="h-5 w-5" />
-                        )
+                      actionLoading === "favorites" ? null : isMovieFavorite ? (
+                        <X className="h-5 w-5" />
+                      ) : (
+                        <Heart className="h-5 w-5" />
                       )
                     }
                     onClick={handleToggleFavorites}
                     disabled={actionLoading === "favorites" || userStoreLoading}
                     className={
-                      isMovieFavorite 
-                        ? "bg-red-600 hover:bg-red-700 text-white" 
+                      isMovieFavorite
+                        ? "bg-red-600 hover:bg-red-700 text-white"
                         : "hover:bg-red-600/20 hover:text-red-400 hover:border-red-400"
                     }
                   >
@@ -366,19 +401,17 @@ const MovieDetails = () => {
                     variant={isMovieWatched ? "primary" : "secondary"}
                     size="medium"
                     leftIcon={
-                      actionLoading === "watched" ? null : (
-                        isMovieWatched ? (
-                          <X className="h-5 w-5" />
-                        ) : (
-                          <Eye className="h-5 w-5" />
-                        )
+                      actionLoading === "watched" ? null : isMovieWatched ? (
+                        <X className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
                       )
                     }
                     onClick={handleToggleWatched}
                     disabled={actionLoading === "watched" || userStoreLoading}
                     className={
-                      isMovieWatched 
-                        ? "bg-green-600 hover:bg-green-700 text-white" 
+                      isMovieWatched
+                        ? "bg-green-600 hover:bg-green-700 text-white"
                         : "hover:bg-green-600/20 hover:text-green-400 hover:border-green-400"
                     }
                   >
@@ -418,7 +451,7 @@ const MovieDetails = () => {
             {[
               { id: "overview", label: "Details" },
               { id: "cast", label: "Cast & Crew" },
-              { id: "reviews", label: "Reviews" }, // Add Reviews tab
+              { id: "reviews", label: "Reviews" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -554,16 +587,22 @@ const MovieDetails = () => {
                 <div className="mb-8">
                   <h4 className="text-lg font-medium mb-4">Main Cast</h4>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    {movie.cast.slice(0, 10).map((actor) => (
-                      <div key={actor.id} className="text-center">
-                        <img
-                          src={
-                            actor.profilePath ||
-                            "https://via.placeholder.com/150x200/1f2937/9ca3af?text=No+Image"
-                          }
-                          alt={actor.name}
-                          className="w-full h-32 object-cover rounded-lg mb-2"
-                        />
+                    {movie.cast.slice(0, 10).map((actor, index) => (
+                      <div
+                        key={`cast-${actor.id}-${index}`}
+                        className="text-center"
+                      >
+                        <div className="w-full h-32 bg-gray-800 rounded-lg mb-2 flex items-center justify-center overflow-hidden">
+                          {actor.profilePath ? (
+                            <img
+                              src={actor.profilePath}
+                              alt={actor.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <User className="h-8 w-8 text-gray-500" />
+                          )}
+                        </div>
                         <p className="text-sm font-medium text-white">
                           {actor.name}
                         </p>
@@ -581,19 +620,22 @@ const MovieDetails = () => {
                 <div>
                   <h4 className="text-lg font-medium mb-4">Key Crew</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {movie.crew.slice(0, 8).map((member) => (
+                    {movie.crew.slice(0, 8).map((member, index) => (
                       <div
-                        key={member.id}
+                        key={`crew-${member.id}-${index}`}
                         className="flex items-center space-x-3"
                       >
-                        <img
-                          src={
-                            member.profilePath ||
-                            "https://via.placeholder.com/60x80/1f2937/9ca3af?text=No+Image"
-                          }
-                          alt={member.name}
-                          className="w-12 h-16 object-cover rounded"
-                        />
+                        <div className="w-12 h-16 bg-gray-800 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
+                          {member.profilePath ? (
+                            <img
+                              src={member.profilePath}
+                              alt={member.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <User className="h-6 w-6 text-gray-500" />
+                          )}
+                        </div>
                         <div>
                           <p className="text-sm font-medium text-white">
                             {member.name}
@@ -610,9 +652,12 @@ const MovieDetails = () => {
 
           {/* Reviews Tab Content */}
           {activeTab === "reviews" && (
-            <ReviewsSection 
-              movieId={id} 
-              movieTitle={movie.title}
+            <ReviewsSection
+              key={reviewsKey}
+              movieId={movieId}
+              currentUserId={user?._id}
+              reviewsApi={reviewsApi}
+              onCreateReview={handleCreateReview}
             />
           )}
         </div>
@@ -644,6 +689,16 @@ const MovieDetails = () => {
           onRetry={retrySimilarMovies}
         />
       </div>
+
+      {/* Create Review Modal */}
+      <CreateReviewModal
+        isOpen={isReviewModalOpen}
+        onClose={handleModalClose}
+        movieId={movieId}
+        movieTitle={movie?.title}
+        onReviewCreated={handleReviewCreated}
+        editData={editData}
+      />
     </div>
   );
 };

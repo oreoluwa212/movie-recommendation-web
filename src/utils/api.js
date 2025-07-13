@@ -3,10 +3,11 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
 
 import axios from 'axios';
 
-// Cache implementation
+// Enhanced Cache implementation with size limits
 class APICache {
-    constructor() {
+    constructor(maxSize = 100) {
         this.cache = new Map();
+        this.maxSize = maxSize;
         this.CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
     }
 
@@ -15,28 +16,49 @@ class APICache {
         if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
             return cached.data;
         }
+        if (cached) {
+            this.cache.delete(key);
+        }
         return null;
     }
 
     set(key, data) {
+        // Remove oldest entries if cache is full
+        if (this.cache.size >= this.maxSize) {
+            const oldestKey = this.cache.keys().next().value;
+            this.cache.delete(oldestKey);
+        }
+
         this.cache.set(key, {
             data,
             timestamp: Date.now()
         });
     }
 
-    clear() {
-        this.cache.clear();
-    }
-
-    // New method to delete specific keys
     delete(key) {
         this.cache.delete(key);
     }
 
-    // New method to get all keys
+    clear() {
+        this.cache.clear();
+    }
+
     keys() {
         return this.cache.keys();
+    }
+
+    size() {
+        return this.cache.size;
+    }
+
+    // Clean expired entries
+    cleanup() {
+        const now = Date.now();
+        for (const [key, value] of this.cache.entries()) {
+            if (now - value.timestamp >= this.CACHE_DURATION) {
+                this.cache.delete(key);
+            }
+        }
     }
 }
 
@@ -88,6 +110,38 @@ const requestQueue = new RequestQueue(5, 100);
 const heavyQueue = new RequestQueue(2, 500);
 const ongoingRequests = new Map();
 
+// Storage utility to handle different environments
+const storage = {
+    getItem: (key) => {
+        try {
+            return typeof window !== 'undefined' && window.localStorage
+                ? localStorage.getItem(key)
+                : null;
+        } catch (error) {
+            console.warn('localStorage not available:', error);
+            return null;
+        }
+    },
+    setItem: (key, value) => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                localStorage.setItem(key, value);
+            }
+        } catch (error) {
+            console.warn('localStorage not available:', error);
+        }
+    },
+    removeItem: (key) => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                localStorage.removeItem(key);
+            }
+        } catch (error) {
+            console.warn('localStorage not available:', error);
+        }
+    }
+};
+
 // Enhanced axios instance with increased timeout
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -100,13 +154,12 @@ const api = axios.create({
 // Enhanced request interceptor
 api.interceptors.request.use(
     (config) => {
-        // Get token from localStorage (most up-to-date)
-        const token = localStorage.getItem('authToken');
+        // Get token from storage (most up-to-date)
+        const token = storage.getItem('authToken');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
         console.log('🚀 Making API request:', config.method?.toUpperCase(), config.url);
-        console.log('🚀 Request data:', config.data);
         return config;
     },
     (error) => {
@@ -119,12 +172,10 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => {
         console.log('✅ API response received:', response.config.url, response.status);
-        console.log('✅ Response data:', response.data);
         return response;
     },
     async (error) => {
         console.error('❌ API error:', error.config?.url, error.response?.status, error.message);
-        console.error('❌ Error response data:', error.response?.data);
 
         const originalRequest = error.config;
 
@@ -147,7 +198,7 @@ api.interceptors.response.use(
         // Handle 401 errors (unauthorized)
         if (error.response?.status === 401) {
             console.log('🔒 Unauthorized request - clearing auth data');
-            localStorage.removeItem('authToken');
+            storage.removeItem('authToken');
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('auth-logout'));
             }
@@ -156,6 +207,37 @@ api.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
+// Error handling utility
+function handleApiError(error, context = '') {
+    console.error(`API Error${context ? ` (${context})` : ''}:`, error);
+
+    if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+
+        switch (status) {
+            case 400:
+                throw new Error(data?.message || 'Bad request');
+            case 401:
+                throw new Error('Unauthorized - please log in again');
+            case 403:
+                throw new Error('Forbidden - you don\'t have permission');
+            case 404:
+                throw new Error('Not found');
+            case 429:
+                throw new Error('Too many requests - please try again later');
+            case 500:
+                throw new Error('Server error - please try again later');
+            default:
+                throw new Error(data?.message || `Request failed with status ${status}`);
+        }
+    } else if (error.request) {
+        throw new Error('Network error - please check your connection');
+    } else {
+        throw new Error(error.message || 'An unexpected error occurred');
+    }
+}
 
 // Enhanced request function with caching and selective queuing
 const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
@@ -203,6 +285,8 @@ const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
         }
 
         return result;
+    } catch (error) {
+        handleApiError(error, cacheKey);
     } finally {
         // Clean up ongoing request
         if (cacheKey) {
@@ -215,127 +299,82 @@ const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
 export const authApi = {
     register: async (userData) => {
         try {
-            console.log('🔐 AuthAPI: Starting registration for:', { ...userData, password: '[HIDDEN]' });
+            console.log('🔐 AuthAPI: Starting registration');
             const response = await api.post('/auth/register', userData);
-            console.log('🔐 AuthAPI: Registration response:', response.data);
+            console.log('🔐 AuthAPI: Registration successful');
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Registration failed:', error);
-            console.error('🔐 AuthAPI: Error details:', {
-                status: error.response?.status,
-                statusText: error.response?.statusText,
-                data: error.response?.data,
-                message: error.message
-            });
-
-            let errorMessage = 'Registration failed';
-
-            if (error.response?.data?.message) {
-                errorMessage = error.response.data.message;
-            } else if (error.response?.data?.error) {
-                errorMessage = error.response.data.error;
-            } else if (error.response?.data) {
-                errorMessage = typeof error.response.data === 'string'
-                    ? error.response.data
-                    : 'Registration failed';
-            } else if (error.message) {
-                errorMessage = error.message;
-            }
-
-            const finalError = new Error(errorMessage);
-            finalError.response = error.response;
-            finalError.status = error.response?.status;
-
-            throw finalError;
+            console.error('🔐 AuthAPI: Registration failed:', error.response?.data);
+            handleApiError(error, 'register');
         }
     },
 
     login: async (credentials) => {
         try {
-            console.log('🔐 AuthAPI: Starting login for:', { ...credentials, password: '[HIDDEN]' });
+            console.log('🔐 AuthAPI: Starting login');
             const response = await api.post('/auth/login', credentials);
-            console.log('🔐 AuthAPI: Login response:', { ...response.data, password: '[HIDDEN]' });
+            console.log('🔐 AuthAPI: Login successful');
 
             if (response.data.token) {
-                localStorage.setItem('authToken', response.data.token);
+                storage.setItem('authToken', response.data.token);
             }
 
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Login failed:', error.response?.data || error.message);
-            const errorMessage = error.response?.data?.message ||
-                error.response?.data?.error ||
-                error.message ||
-                'Login failed';
-            throw new Error(errorMessage);
+            console.error('🔐 AuthAPI: Login failed:', error.response?.data);
+            handleApiError(error, 'login');
         }
     },
 
     verifyEmail: async (verificationData) => {
         try {
-            console.log('🔐 AuthAPI: Starting email verification for:', { ...verificationData, verificationCode: '[HIDDEN]' });
+            console.log('🔐 AuthAPI: Starting email verification');
             const response = await api.post('/auth/verify-email', verificationData);
-            console.log('🔐 AuthAPI: Email verification response:', response.data);
+            console.log('🔐 AuthAPI: Email verification successful');
 
             if (response.data.token) {
-                localStorage.setItem('authToken', response.data.token);
+                storage.setItem('authToken', response.data.token);
             }
 
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Email verification failed:', error.response?.data || error.message);
-            const errorMessage = error.response?.data?.message ||
-                error.response?.data?.error ||
-                error.message ||
-                'Email verification failed';
-            throw new Error(errorMessage);
+            console.error('🔐 AuthAPI: Email verification failed:', error.response?.data);
+            handleApiError(error, 'verifyEmail');
         }
     },
 
     resendVerificationCode: async (emailData) => {
         try {
-            console.log('🔐 AuthAPI: Resending verification code for:', emailData);
+            console.log('🔐 AuthAPI: Resending verification code');
             const response = await api.post('/auth/resend-verification-code', emailData);
-            console.log('🔐 AuthAPI: Resend verification response:', response.data);
+            console.log('🔐 AuthAPI: Verification code resent successfully');
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Resend verification failed:', error.response?.data || error.message);
-            const errorMessage = error.response?.data?.message ||
-                error.response?.data?.error ||
-                error.message ||
-                'Failed to resend verification code';
-            throw new Error(errorMessage);
+            console.error('🔐 AuthAPI: Resend verification failed:', error.response?.data);
+            handleApiError(error, 'resendVerificationCode');
         }
     },
 
     getCurrentUser: async () => {
         try {
             const response = await api.get('/auth/me');
-            console.log('🔐 AuthAPI: Current user retrieved:', response.data);
+            console.log('🔐 AuthAPI: Current user retrieved');
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Get current user failed:', error.response?.data || error.message);
-            const errorMessage = error.response?.data?.message ||
-                error.response?.data?.error ||
-                error.message ||
-                'Failed to get current user';
-            throw new Error(errorMessage);
+            console.error('🔐 AuthAPI: Get current user failed:', error.response?.data);
+            handleApiError(error, 'getCurrentUser');
         }
     },
 
     updateProfile: async (userData) => {
         try {
-            console.log('🔐 AuthAPI: Updating profile:', userData);
+            console.log('🔐 AuthAPI: Updating profile');
             const response = await api.put('/auth/profile', userData);
-            console.log('🔐 AuthAPI: Profile updated:', response.data);
+            console.log('🔐 AuthAPI: Profile updated successfully');
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Profile update failed:', error.response?.data || error.message);
-            const errorMessage = error.response?.data?.message ||
-                error.response?.data?.error ||
-                error.message ||
-                'Profile update failed';
-            throw new Error(errorMessage);
+            console.error('🔐 AuthAPI: Profile update failed:', error.response?.data);
+            handleApiError(error, 'updateProfile');
         }
     },
 
@@ -345,17 +384,13 @@ export const authApi = {
             console.log('🔐 AuthAPI: Token refreshed successfully');
 
             if (response.data.token) {
-                localStorage.setItem('authToken', response.data.token);
+                storage.setItem('authToken', response.data.token);
             }
 
             return response.data;
         } catch (error) {
-            console.error('🔐 AuthAPI: Token refresh failed:', error.response?.data || error.message);
-            const errorMessage = error.response?.data?.message ||
-                error.response?.data?.error ||
-                error.message ||
-                'Token refresh failed';
-            throw new Error(errorMessage);
+            console.error('🔐 AuthAPI: Token refresh failed:', error.response?.data);
+            handleApiError(error, 'refreshToken');
         }
     },
 
@@ -365,18 +400,18 @@ export const authApi = {
         } catch (error) {
             console.error('🔐 AuthAPI: Logout endpoint failed:', error.message);
         } finally {
-            localStorage.removeItem('authToken');
+            storage.removeItem('authToken');
             apiCache.clear();
         }
     },
 
     isAuthenticated: () => {
-        const token = localStorage.getItem('authToken');
+        const token = storage.getItem('authToken');
         return !!token;
     },
 
     getToken: () => {
-        return localStorage.getItem('authToken');
+        return storage.getItem('authToken');
     }
 };
 
@@ -514,20 +549,6 @@ export const movieApi = {
         );
     },
 
-    filterMovies: async (queryParams) => {
-        const url = `/movies/filter${queryParams ? `?${queryParams}` : ''}`;
-        console.log('Filtering movies with URL:', url);
-
-        try {
-            const response = await api.get(url);
-            console.log('Filter response:', response.data);
-            return response.data;
-        } catch (error) {
-            console.error('Filter movies error:', error);
-            throw error;
-        }
-    },
-
     buildFilterQuery: (filters) => {
         const params = new URLSearchParams();
 
@@ -542,6 +563,20 @@ export const movieApi = {
         if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
 
         return params.toString();
+    },
+
+    filterMovies: async (queryParams) => {
+        const url = `/movies/filter${queryParams ? `?${queryParams}` : ''}`;
+        console.log('Filtering movies with URL:', url);
+
+        try {
+            const response = await api.get(url);
+            console.log('Filter response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Filter movies error:', error);
+            handleApiError(error, 'filterMovies');
+        }
     },
 
     filterByRating: async (minRating, maxRating, page = 1) => {
@@ -578,18 +613,17 @@ export const userApi = {
             const response = await api.put('/users/profile', profileData);
             return response.data;
         } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to update profile');
+            handleApiError(error, 'updateProfile');
         }
     },
 
     addFavorite: async (movieData) => {
         try {
             const response = await api.post('/users/favorites', movieData);
-            // Clear favorites cache when adding
             apiCache.delete('user-favorites');
             return response.data;
         } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to add favorite');
+            handleApiError(error, 'addFavorite');
         }
     },
 
@@ -608,22 +642,20 @@ export const userApi = {
     removeFavorite: async (movieId) => {
         try {
             const response = await api.delete(`/users/favorites/${movieId}`);
-            // Clear favorites cache when removing
             apiCache.delete('user-favorites');
             return response.data;
         } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to remove favorite');
+            handleApiError(error, 'removeFavorite');
         }
     },
 
     addToWatched: async (movieData) => {
         try {
             const response = await api.post('/users/watched', movieData);
-            // Clear watched cache when adding
             apiCache.delete('user-watched');
             return response.data;
         } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to add to watched');
+            handleApiError(error, 'addToWatched');
         }
     },
 
@@ -642,54 +674,118 @@ export const userApi = {
     removeFromWatched: async (movieId) => {
         try {
             const response = await api.delete(`/users/watched/${movieId}`);
-            // Clear watched cache when removing
             apiCache.delete('user-watched');
             return response.data;
         } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to remove from watched');
+            handleApiError(error, 'removeFromWatched');
         }
     },
 };
 
+// Validation function for review data
+function validateReviewData(reviewData) {
+    if (!reviewData) {
+        throw new Error('Review data is required');
+    }
+
+    if (!reviewData.movieId) {
+        throw new Error('Movie ID is required');
+    }
+
+    if (!reviewData.title || reviewData.title.trim() === '') {
+        throw new Error('Review title is required');
+    }
+
+    if (!reviewData.rating || reviewData.rating < 1 || reviewData.rating > 10) {
+        throw new Error('Rating must be between 1 and 10');
+    }
+
+    const reviewText = reviewData.review || reviewData.reviewText || '';
+    if (reviewText.length > 2000) {
+        throw new Error('Review text cannot exceed 2000 characters');
+    }
+
+    return true;
+}
+
+// Cache clearing function for reviews
+function clearReviewCaches(movieId) {
+    apiCache.delete('user-reviews');
+
+    if (movieId) {
+        apiCache.delete(`user-review-movie-${movieId}`);
+
+        for (const key of apiCache.keys()) {
+            if (key.startsWith(`movie-reviews-${movieId}`)) {
+                apiCache.delete(key);
+            }
+        }
+
+        apiCache.delete(`movie-review-stats-${movieId}`);
+    }
+
+    for (const key of apiCache.keys()) {
+        if (key.startsWith('top-reviews-') || key.startsWith('recent-reviews-')) {
+            apiCache.delete(key);
+        }
+    }
+}
+
 export const reviewsApi = {
     createOrUpdateReview: async (reviewData) => {
         try {
+            validateReviewData(reviewData);
+
             const payload = {
                 movieId: parseInt(reviewData.movieId),
-                title: reviewData.title || 'Unknown Movie',
+                title: reviewData.title,
                 rating: parseInt(reviewData.rating),
-                review: reviewData.review || reviewData.reviewText,
-                spoiler: reviewData.spoiler || false,
+                review: reviewData.review || reviewData.reviewText || '',
+                spoiler: Boolean(reviewData.spoiler),
                 ...(reviewData.genre && { genre: reviewData.genre }),
                 ...(reviewData.releaseDate && { releaseDate: reviewData.releaseDate }),
                 ...(reviewData.poster && { poster: reviewData.poster })
             };
 
             const response = await api.post('/reviews', payload);
-            
-            // Clear relevant caches
-            apiCache.delete(`user-review-movie-${reviewData.movieId}`);
-            apiCache.delete('user-reviews');
-            // Clear movie reviews cache for all pages
-            for (const key of apiCache.keys()) {
-                if (key.startsWith(`movie-reviews-${reviewData.movieId}`)) {
-                    apiCache.delete(key);
-                }
-            }
-            
+            clearReviewCaches(reviewData.movieId);
             return response.data;
         } catch (error) {
-            console.error('Create/Update review error:', error);
-            throw new Error(error.response?.data?.message || 'Failed to create/update review');
+            console.error('Save review error:', error);
+            handleApiError(error, 'createOrUpdateReview');
         }
     },
 
-    getMovieReviews: async (movieId, page = 1, limit = 5) => {
-        const cacheKey = `movie-reviews-${movieId}-${page}-${limit}`;
+    updateReview: async (reviewId, reviewData) => {
+        try {
+            validateReviewData(reviewData);
+
+            const payload = {
+                movieId: parseInt(reviewData.movieId),
+                title: reviewData.title,
+                rating: parseInt(reviewData.rating),
+                review: reviewData.review || reviewData.reviewText || '',
+                spoiler: Boolean(reviewData.spoiler),
+                ...(reviewData.genre && { genre: reviewData.genre }),
+                ...(reviewData.releaseDate && { releaseDate: reviewData.releaseDate }),
+                ...(reviewData.poster && { poster: reviewData.poster })
+            };
+
+            const response = await api.post(`/reviews`, payload);
+            clearReviewCaches(reviewData.movieId);
+            return response.data;
+        } catch (error) {
+            console.error('Update review error:', error);
+            handleApiError(error, 'updateReview');
+        }
+    },
+
+    getMovieReviews: async (movieId, page = 1, limit = 5, sortBy = 'createdAt', sortOrder = 'desc', filterSpoilers = false) => {
+        const cacheKey = `movie-reviews-${movieId}-${page}-${limit}-${sortBy}-${sortOrder}-${filterSpoilers}`;
         return makeRequest(
             async () => {
                 const response = await api.get(`/reviews/movie/${movieId}`, {
-                    params: { page, limit }
+                    params: { page, limit, sortBy, sortOrder, filterSpoilers }
                 });
                 return response.data;
             },
@@ -713,30 +809,29 @@ export const reviewsApi = {
     deleteReview: async (reviewId) => {
         try {
             const response = await api.delete(`/reviews/${reviewId}`);
-            
-            // Clear all relevant caches
+
             apiCache.delete('user-reviews');
             apiCache.delete(`review-${reviewId}`);
-            // Clear user-movie review caches
+
             for (const key of apiCache.keys()) {
                 if (key.startsWith('user-review-movie-') || key.startsWith('movie-reviews-')) {
                     apiCache.delete(key);
                 }
             }
-            
+
             return response.data;
         } catch (error) {
             console.error('Delete review error:', error);
-            throw new Error(error.response?.data?.message || 'Failed to delete review');
+            handleApiError(error, 'deleteReview');
         }
     },
 
-    getUserReviews: async (page = 1, limit = 10) => {
-        const cacheKey = `user-reviews-${page}-${limit}`;
+    getUserReviews: async (page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc') => {
+        const cacheKey = `user-reviews-${page}-${limit}-${sortBy}-${sortOrder}`;
         return makeRequest(
             async () => {
                 const response = await api.get('/reviews/user/me', {
-                    params: { page, limit }
+                    params: { page, limit, sortBy, sortOrder }
                 });
                 return response.data;
             },
@@ -769,48 +864,34 @@ export const reviewsApi = {
         );
     },
 
-    getRecentReviews: async (limit = 10) => {
-        const cacheKey = `recent-reviews-${limit}`;
-        return makeRequest(
-            async () => {
-                const response = await api.get('/reviews/recent', {
-                    params: { limit }
-                });
-                return response.data;
-            },
-            cacheKey,
-            'light'
-        );
-    },
-
-    reportReview: async (reviewId, reason) => {
+    reportReview: async (reviewId, reason, additionalInfo = '') => {
         try {
             const response = await api.post(`/reviews/${reviewId}/report`, {
-                reason
+                reason,
+                additionalInfo
             });
             return response.data;
         } catch (error) {
             console.error('Report review error:', error);
-            throw new Error(error.response?.data?.message || 'Failed to report review');
+            handleApiError(error, 'reportReview');
         }
     },
 
     toggleLikeReview: async (reviewId) => {
         try {
             const response = await api.post(`/reviews/${reviewId}/like`);
-            
-            // Clear relevant caches
+
             apiCache.delete(`review-${reviewId}`);
             for (const key of apiCache.keys()) {
-                if (key.startsWith('movie-reviews-')) {
+                if (key.startsWith('movie-reviews-') || key.startsWith('top-reviews-') || key.startsWith('recent-reviews-')) {
                     apiCache.delete(key);
                 }
             }
-            
+
             return response.data;
         } catch (error) {
             console.error('Toggle like error:', error);
-            throw new Error(error.response?.data?.message || 'Failed to toggle like');
+            handleApiError(error, 'toggleLikeReview');
         }
     },
 
@@ -821,6 +902,14 @@ export const reviewsApi = {
     clearMovieCache: (movieId) => {
         for (const key of apiCache.keys()) {
             if (key.includes(`movie-${movieId}`) || key.includes(`user-review-movie-${movieId}`)) {
+                apiCache.delete(key);
+            }
+        }
+    },
+
+    clearUserCache: () => {
+        for (const key of apiCache.keys()) {
+            if (key.startsWith('user-reviews') || key.startsWith('user-bookmarks') || key.startsWith('following-reviews')) {
                 apiCache.delete(key);
             }
         }
