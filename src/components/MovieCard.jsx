@@ -1,7 +1,15 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Star, Play, Heart, Eye, BookmarkPlus, Calendar, Check } from "lucide-react";
-import { toast } from 'react-toastify';
+import {
+  Star,
+  Play,
+  Heart,
+  Eye,
+  BookmarkPlus,
+  Calendar,
+  Check,
+} from "lucide-react";
+import { toast } from "react-toastify";
 import { useUserStore } from "../stores/userStore";
 
 // Movie Card Skeleton
@@ -20,7 +28,9 @@ const MovieCardSkeleton = ({ size = "medium" }) => {
 
   return (
     <div className={`${sizeClasses[size]} flex-shrink-0`}>
-      <div className={`animate-pulse ${posterSizeClasses[size]} bg-gray-800 rounded-lg mb-2`} />
+      <div
+        className={`animate-pulse ${posterSizeClasses[size]} bg-gray-800 rounded-lg mb-2`}
+      />
       <div className="animate-pulse h-4 bg-gray-700 rounded w-4/5 mb-2" />
       <div className="flex items-center justify-between">
         <div className="animate-pulse h-3 bg-gray-700 rounded w-12" />
@@ -53,7 +63,7 @@ const MovieCard = ({
     getWatchedRating,
     watchlists,
     addMovieToWatchlist,
-    isLoading: userStoreLoading
+    isLoading: userStoreLoading,
   } = useUserStore();
 
   if (isLoading) {
@@ -64,9 +74,10 @@ const MovieCard = ({
     return null;
   }
 
-  const imageUrl = movie.poster || movie.poster_path
-    ? movie.poster || `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-    : null;
+  const imageUrl =
+    movie.poster || movie.poster_path
+      ? movie.poster || `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+      : null;
 
   const sizeClasses = {
     small: "w-40",
@@ -87,26 +98,22 @@ const MovieCard = ({
   const handleAddToFavorites = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     try {
       if (movieIsFavorite) {
         await removeFromFavorites(movie.id);
-        // Only show toast if store action doesn't handle it
-        // toast.success(`${movie.title} removed from favorites`);
       } else {
         await addToFavorites(movie);
-        // Only show toast if store action doesn't handle it
-        // toast.success(`${movie.title} added to favorites`);
       }
     } catch {
-      toast.error('Failed to update favorites');
+      toast.error("Failed to update favorites");
     }
   };
 
   const handleAddToWatchlist = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     try {
       if (watchlists.length > 0) {
         const firstWatchlist = watchlists[0];
@@ -114,17 +121,17 @@ const MovieCard = ({
         // Only show toast if store action doesn't handle it
         // toast.success(`${movie.title} added to watchlist`);
       } else {
-        toast.info('Please create a watchlist first');
+        toast.info("Please create a watchlist first");
       }
     } catch {
-      toast.error('Failed to add to watchlist');
+      toast.error("Failed to add to watchlist");
     }
   };
 
   const handleMarkAsWatched = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     try {
       if (movieIsWatched) {
         await removeFromWatched(movie.id);
@@ -136,7 +143,7 @@ const MovieCard = ({
         // toast.success(`${movie.title} marked as watched`);
       }
     } catch {
-      toast.error('Failed to update watched status');
+      toast.error("Failed to update watched status");
     }
   };
 
@@ -172,7 +179,9 @@ const MovieCard = ({
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleMovieClick}
     >
-      <div className={`relative ${posterSizeClasses[size]} overflow-hidden rounded-lg bg-gray-800 shadow-lg`}>
+      <div
+        className={`relative ${posterSizeClasses[size]} overflow-hidden rounded-lg bg-gray-800 shadow-lg`}
+      >
         {imageUrl && !imageError ? (
           <img
             src={imageUrl}
@@ -187,8 +196,16 @@ const MovieCard = ({
           <div className="w-full h-full flex items-center justify-center bg-gray-800">
             <div className="text-center px-4">
               <div className="text-gray-400 mb-2">
-                <svg className="w-12 h-12 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                <svg
+                  className="w-12 h-12 mx-auto"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </div>
               <p className="text-gray-400 text-xs font-medium">No Image</p>
@@ -215,9 +232,11 @@ const MovieCard = ({
           )}
         </div>
 
-        <div className={`absolute inset-0 bg-black/60 transition-opacity duration-300 ${
-          isHovered ? "opacity-100" : "opacity-0"
-        }`}>
+        <div
+          className={`absolute inset-0 bg-black/60 transition-opacity duration-300 ${
+            isHovered ? "opacity-100" : "opacity-0"
+          }`}
+        >
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="bg-red-600 rounded-full p-3 transform transition-all duration-300 hover:bg-red-700 hover:scale-110">
               <Play className="h-6 w-6 text-white fill-current" />
@@ -263,11 +282,17 @@ const MovieCard = ({
                     ? "bg-red-600 hover:bg-red-700"
                     : "bg-black/70 hover:bg-red-600"
                 } ${userStoreLoading ? "opacity-50 cursor-not-allowed" : ""}`}
-                title={movieIsFavorite ? "Remove from Favorites" : "Add to Favorites"}
+                title={
+                  movieIsFavorite ? "Remove from Favorites" : "Add to Favorites"
+                }
               >
-                <Heart className={`h-4 w-4 text-white ${movieIsFavorite ? "fill-current" : ""}`} />
+                <Heart
+                  className={`h-4 w-4 text-white ${
+                    movieIsFavorite ? "fill-current" : ""
+                  }`}
+                />
               </button>
-              
+
               <button
                 onClick={handleAddToWatchlist}
                 disabled={userStoreLoading || watchlists.length === 0}
@@ -276,11 +301,15 @@ const MovieCard = ({
                     ? "bg-black/50 cursor-not-allowed"
                     : "bg-black/70 hover:bg-blue-600"
                 } ${userStoreLoading ? "opacity-50 cursor-not-allowed" : ""}`}
-                title={watchlists.length === 0 ? "Create a watchlist first" : "Add to Watchlist"}
+                title={
+                  watchlists.length === 0
+                    ? "Create a watchlist first"
+                    : "Add to Watchlist"
+                }
               >
                 <BookmarkPlus className="h-4 w-4 text-white" />
               </button>
-              
+
               <button
                 onClick={handleMarkAsWatched}
                 disabled={userStoreLoading}
@@ -289,9 +318,15 @@ const MovieCard = ({
                     ? "bg-green-600 hover:bg-green-700"
                     : "bg-black/70 hover:bg-green-600"
                 } ${userStoreLoading ? "opacity-50 cursor-not-allowed" : ""}`}
-                title={movieIsWatched ? "Remove from Watched" : "Mark as Watched"}
+                title={
+                  movieIsWatched ? "Remove from Watched" : "Mark as Watched"
+                }
               >
-                <Eye className={`h-4 w-4 text-white ${movieIsWatched ? "fill-current" : ""}`} />
+                <Eye
+                  className={`h-4 w-4 text-white ${
+                    movieIsWatched ? "fill-current" : ""
+                  }`}
+                />
               </button>
             </div>
           )}
