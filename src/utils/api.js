@@ -298,6 +298,184 @@ const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
     }
 };
 
+export const userApi = {
+    updateProfile: async (profileData) => {
+        try {
+            const response = await api.put('/users/profile', profileData);
+            // Clear relevant caches
+            apiCache.delete('user-profile');
+            apiCache.delete('current-user');
+            return response.data;
+        } catch (error) {
+            handleApiError(error, 'updateProfile');
+        }
+    },
+
+    uploadAvatar: async (formData) => {
+        try {
+            const response = await api.post('/users/avatar', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+            // Clear relevant caches
+            apiCache.delete('user-profile');
+            apiCache.delete('current-user');
+            return response.data;
+        } catch (error) {
+            handleApiError(error, 'uploadAvatar');
+        }
+    },
+
+    deleteAvatar: async () => {
+        try {
+            const response = await api.delete('/users/avatar');
+            // Clear relevant caches
+            apiCache.delete('user-profile');
+            apiCache.delete('current-user');
+            return response.data;
+        } catch (error) {
+            handleApiError(error, 'deleteAvatar');
+        }
+    },
+
+    updateTheme: async (theme) => {
+        try {
+            const response = await api.put('/users/profile', {
+                preferences: { theme }
+            });
+            // Clear relevant caches
+            apiCache.delete('user-profile');
+            apiCache.delete('current-user');
+            return response.data;
+        } catch (error) {
+            handleApiError(error, 'updateTheme');
+        }
+    },
+
+    getProfile: async () => {
+        const cacheKey = 'user-profile';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/users/profile');
+                return response.data;
+            },
+            cacheKey,
+            'none'
+        );
+    },
+
+    addFavorite: async (movieData) => {
+        try {
+            const response = await api.post('/users/favorites', movieData);
+            apiCache.delete('user-favorites');
+            apiCache.delete('user-profile'); // Update stats
+            return response.data;
+        } catch (error) {
+            handleApiError(error, 'addFavorite');
+        }
+    },
+
+    getFavorites: async () => {
+        const cacheKey = 'user-favorites';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/users/favorites');
+                return response.data;
+            },
+            cacheKey,
+            'none'
+        );
+    },
+
+    removeFavorite: async (movieId) => {
+        try {
+            const response = await api.delete(`/users/favorites/${movieId}`);
+            apiCache.delete('user-favorites');
+            apiCache.delete('user-profile'); // Update stats
+            return response.data;
+        } catch (error) {
+            handleApiError(error, 'removeFavorite');
+        }
+    },
+
+    addToWatched: async (movieData) => {
+        try {
+            const response = await api.post('/users/watched', movieData);
+            apiCache.delete('user-watched');
+            apiCache.delete('user-profile'); // Update stats
+            return response.data;
+        } catch (error) {
+            handleApiError(error, 'addToWatched');
+        }
+    },
+
+    getWatched: async () => {
+        const cacheKey = 'user-watched';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/users/watched');
+                return response.data;
+            },
+            cacheKey,
+            'none'
+        );
+    },
+
+    removeFromWatched: async (movieId) => {
+        try {
+            const response = await api.delete(`/users/watched/${movieId}`);
+            apiCache.delete('user-watched');
+            apiCache.delete('user-profile'); // Update stats
+            return response.data;
+        } catch (error) {
+            handleApiError(error, 'removeFromWatched');
+        }
+    },
+
+    // Additional utility functions
+    validateImageFile: (file) => {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        const maxSize = 5 * 1024 * 1024; // 5MB
+
+        if (!allowedTypes.includes(file.type)) {
+            throw new Error('Invalid file type. Please upload a JPEG, PNG, GIF, or WebP image.');
+        }
+
+        if (file.size > maxSize) {
+            throw new Error('File size too large. Please upload an image smaller than 5MB.');
+        }
+
+        return true;
+    },
+
+    compressImage: async (file, maxWidth = 800, quality = 0.8) => {
+        return new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+
+            img.onload = () => {
+                // Calculate new dimensions
+                const ratio = Math.min(maxWidth / img.width, maxWidth / img.height);
+                const newWidth = img.width * ratio;
+                const newHeight = img.height * ratio;
+
+                // Set canvas size
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+
+                // Draw and compress
+                ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+                canvas.toBlob(resolve, file.type, quality);
+            };
+
+            img.src = URL.createObjectURL(file);
+        });
+    }
+};
+
 // Enhanced Auth API functions
 export const authApi = {
     register: async (userData) => {
@@ -347,17 +525,23 @@ export const authApi = {
     },
 
     getCurrentUser: async () => {
-        try {
-            const response = await api.get('/auth/me');
-            return response.data;
-        } catch (error) {
-            handleApiError(error, 'getCurrentUser');
-        }
+        const cacheKey = 'current-user';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/auth/me');
+                return response.data;
+            },
+            cacheKey,
+            'none'
+        );
     },
 
     updateProfile: async (userData) => {
         try {
             const response = await api.put('/auth/profile', userData);
+            // Clear relevant caches
+            apiCache.delete('current-user');
+            apiCache.delete('user-profile');
             return response.data;
         } catch (error) {
             handleApiError(error, 'updateProfile');
@@ -394,6 +578,35 @@ export const authApi = {
 
     getToken: () => {
         return storage.getItem('authToken');
+    }
+};
+
+// Theme management utilities
+export const themeUtils = {
+    applyTheme: (theme) => {
+        const root = document.documentElement;
+
+        if (theme === 'light') {
+            root.classList.remove('dark');
+            root.classList.add('light');
+        } else {
+            root.classList.remove('light');
+            root.classList.add('dark');
+        }
+
+        // Store theme preference
+        localStorage.setItem('theme', theme);
+    },
+
+    getStoredTheme: () => {
+        return localStorage.getItem('theme') || 'dark';
+    },
+
+    initializeTheme: (userTheme) => {
+        const storedTheme = themeUtils.getStoredTheme();
+        const theme = userTheme || storedTheme;
+        themeUtils.applyTheme(theme);
+        return theme;
     }
 };
 
@@ -584,82 +797,6 @@ export const movieApi = {
         const query = movieApi.buildFilterQuery(filters);
         return movieApi.filterMovies(query);
     }
-};
-
-// User API functions
-export const userApi = {
-    updateProfile: async (profileData) => {
-        try {
-            const response = await api.put('/users/profile', profileData);
-            return response.data;
-        } catch (error) {
-            handleApiError(error, 'updateProfile');
-        }
-    },
-
-    addFavorite: async (movieData) => {
-        try {
-            const response = await api.post('/users/favorites', movieData);
-            apiCache.delete('user-favorites');
-            return response.data;
-        } catch (error) {
-            handleApiError(error, 'addFavorite');
-        }
-    },
-
-    getFavorites: async () => {
-        const cacheKey = 'user-favorites';
-        return makeRequest(
-            async () => {
-                const response = await api.get('/users/favorites');
-                return response.data;
-            },
-            cacheKey,
-            'none'
-        );
-    },
-
-    removeFavorite: async (movieId) => {
-        try {
-            const response = await api.delete(`/users/favorites/${movieId}`);
-            apiCache.delete('user-favorites');
-            return response.data;
-        } catch (error) {
-            handleApiError(error, 'removeFavorite');
-        }
-    },
-
-    addToWatched: async (movieData) => {
-        try {
-            const response = await api.post('/users/watched', movieData);
-            apiCache.delete('user-watched');
-            return response.data;
-        } catch (error) {
-            handleApiError(error, 'addToWatched');
-        }
-    },
-
-    getWatched: async () => {
-        const cacheKey = 'user-watched';
-        return makeRequest(
-            async () => {
-                const response = await api.get('/users/watched');
-                return response.data;
-            },
-            cacheKey,
-            'none'
-        );
-    },
-
-    removeFromWatched: async (movieId) => {
-        try {
-            const response = await api.delete(`/users/watched/${movieId}`);
-            apiCache.delete('user-watched');
-            return response.data;
-        } catch (error) {
-            handleApiError(error, 'removeFromWatched');
-        }
-    },
 };
 
 // Watchlists API functions with selective queuing

@@ -118,6 +118,59 @@ const UserPage = () => {
     }
   }, [user, profile]);
 
+  const handleThemeChange = async (theme) => {
+    try {
+      // Update theme in user preferences
+      if (userStore?.updateTheme) {
+        await userStore.updateTheme(theme);
+      }
+
+      // Apply theme to document
+      const root = document.documentElement;
+      if (theme === "light") {
+        root.classList.remove("dark");
+        root.classList.add("light");
+      } else {
+        root.classList.remove("light");
+        root.classList.add("dark");
+      }
+
+      // Store theme preference in localStorage
+      localStorage.setItem("theme", theme);
+
+      toast.success(`Theme changed to ${theme} mode`);
+    } catch (error) {
+      console.error("Theme change error:", error);
+      toast.error("Failed to update theme");
+    }
+  };
+
+  // Add avatar upload handler (if not already present):
+  const handleAvatarUpload = async (formData) => {
+    try {
+      if (userStore?.uploadAvatar) {
+        await userStore.uploadAvatar(formData);
+        toast.success("Avatar uploaded successfully");
+      }
+    } catch (error) {
+      console.error("Avatar upload error:", error);
+      toast.error("Failed to upload avatar");
+    }
+  };
+
+  // Add avatar delete handler (if not already present):
+  const handleAvatarDelete = async () => {
+    try {
+      if (userStore?.deleteAvatar) {
+        await userStore.deleteAvatar();
+        toast.success("Avatar deleted successfully");
+      }
+    } catch (error) {
+      console.error("Avatar delete error:", error);
+      toast.error("Failed to delete avatar");
+    }
+  };
+
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     navigate(`/user/${tab}`);
@@ -570,6 +623,9 @@ const UserPage = () => {
           onSave={handleSaveProfile}
           onCancel={handleCancelEdit}
           loading={loading}
+          onAvatarUpload={handleAvatarUpload}
+          onAvatarDelete={handleAvatarDelete}
+          onThemeChange={handleThemeChange}
         />
 
         <ProfileStatistics />
