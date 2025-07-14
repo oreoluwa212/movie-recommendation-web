@@ -1,39 +1,20 @@
-/* eslint-disable no-unused-vars */
-// pages/UserPage.jsx - Updated version with WatchlistButton integration
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   Heart,
   BookOpen,
-  User,
-  Settings,
-  Star,
   Eye,
   Trash2,
-  Edit3,
-  Save,
-  X,
-  ArrowLeft,
-  Filter,
-  Grid,
-  List,
-  Plus,
-  Clock,
   FolderPlus,
   Lock,
   Globe,
-  Users,
   Calendar,
-  MoreVertical,
-  Search,
-  BookmarkPlus,
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import { useUserStore } from "../stores/userStore";
 import { useWatchlistStore } from "../stores/watchlistStore";
 import MovieCard from "../components/MovieCard";
 import Button from "../components/ui/Button";
-import WatchlistButton from "../components/WatchlistButton";
 import { toast } from "react-toastify";
 import WatchlistModal from "../components/WatchlistModal";
 import UserPageHeader from "../components/UserPageHeader";
@@ -50,7 +31,6 @@ const UserPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Determine current section from URL path
   const getCurrentSection = () => {
     if (section) return section;
     const path = location.pathname.split("/").pop();
@@ -61,12 +41,11 @@ const UserPage = () => {
 
   const [isWatchlistModalOpen, setIsWatchlistModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(getCurrentSection());
-  const [viewMode, setViewMode] = useState("grid");
-  const [sortBy, setSortBy] = useState("dateAdded");
-  const [filterBy, setFilterBy] = useState("all");
+  const [sortBy] = useState("dateAdded");
+  const [filterBy] = useState("all");
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm] = useState("");
   const [editForm, setEditForm] = useState({
     username: "",
     email: "",
@@ -75,55 +54,45 @@ const UserPage = () => {
     lastName: "",
   });
 
-  const { user, isAuthenticated, logout } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
+
   const userStore = useUserStore();
 
-  // Watchlist store integration
   const {
     watchlists,
     isLoading: isLoadingWatchlists,
     error: watchlistError,
     loadWatchlists,
     deleteWatchlist,
-    syncWithServer,
-    reset: resetWatchlistStore,
   } = useWatchlistStore();
 
-  // Safely destructure from userStore with fallbacks
   const {
     favorites = [],
     watchedMovies = [],
-    watchlists: userWatchlists = [],
     profile = null,
     removeFromFavorites,
     removeFromWatched,
     addToWatched,
     isLoading = false,
-    error = null,
-    clearAllData,
+    error: userError = null,
     loadProfile,
-    getStats,
   } = userStore || {};
 
-  // Initialize user data when component mounts
   useEffect(() => {
     if (isAuthenticated && userStore?.initialize) {
       userStore.initialize();
     }
   }, [isAuthenticated, userStore]);
 
-  // Load profile data and watchlists
   useEffect(() => {
     if (isAuthenticated) {
       if (loadProfile) {
         loadProfile();
       }
-      // Load watchlists from the watchlist store
       loadWatchlists();
     }
   }, [isAuthenticated, loadProfile, loadWatchlists]);
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
       toast.error("Please log in to access this page");
@@ -131,13 +100,11 @@ const UserPage = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Update active tab based on URL
   useEffect(() => {
     const currentSection = getCurrentSection();
     setActiveTab(currentSection);
   }, [location.pathname]);
 
-  // Initialize edit form with user data
   useEffect(() => {
     const userData = profile || user;
     if (userData) {
@@ -151,19 +118,16 @@ const UserPage = () => {
     }
   }, [user, profile]);
 
-  // Handle tab change
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     navigate(`/user/${tab}`);
   };
 
-  // Handle movie click
   const handleMovieClick = (movie) => {
     const movieId = movie.movieId || movie.id;
     navigate(`/movie/${movieId}`);
   };
 
-  // Handle remove from list
   const handleRemoveFromList = async (movie, listType) => {
     try {
       const movieId = movie.movieId || movie.id;
@@ -176,13 +140,11 @@ const UserPage = () => {
         await removeFromWatched(movieId);
         toast.success(`Removed "${movieTitle}" from watched list`);
       }
-    } catch (error) {
-      console.error("Error removing movie:", error);
+    } catch {
       toast.error("Failed to remove movie");
     }
   };
 
-  // Handle mark as watched (for watchlist items)
   const handleMarkAsWatched = async (movie) => {
     try {
       const movieData = {
@@ -199,40 +161,28 @@ const UserPage = () => {
         await addToWatched(movieData);
         toast.success(`"${movie.title}" marked as watched`);
       }
-    } catch (error) {
-      console.error("Error marking as watched:", error);
+    } catch {
       toast.error("Failed to mark as watched");
     }
   };
 
-  // Handle create new watchlist
   const handleCreateWatchlist = () => {
     setIsWatchlistModalOpen(true);
   };
 
-  // Handle delete watchlist
   const handleDeleteWatchlist = async (watchlistId, watchlistName) => {
     if (
       window.confirm(
         `Are you sure you want to delete "${watchlistName}"? This action cannot be undone.`
       )
     ) {
-      const result = await deleteWatchlist(watchlistId);
-      if (result.success) {
-        // Success toast is already handled by the store
-      }
+      await deleteWatchlist(watchlistId);
     }
-  };
-
-  // Handle profile edit
-  const handleEditProfile = () => {
-    setIsEditing(true);
   };
 
   const handleSaveProfile = async () => {
     setLoading(true);
     try {
-      // Validate form
       if (!editForm.username.trim()) {
         toast.error("Username is required");
         return;
@@ -243,17 +193,11 @@ const UserPage = () => {
         return;
       }
 
-      // Here you would call your API to update user profile
-      // For now, we'll simulate the API call
-      console.log("Saving profile:", editForm);
-
-      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       setIsEditing(false);
       toast.success("Profile updated successfully!");
-    } catch (error) {
-      console.error("Error saving profile:", error);
+    } catch {
       toast.error("Failed to update profile");
     } finally {
       setLoading(false);
@@ -272,53 +216,27 @@ const UserPage = () => {
     });
   };
 
-  // Handle logout
-  const handleLogout = () => {
-    logout();
-    if (clearAllData) {
-      clearAllData();
-    }
-    resetWatchlistStore();
-    toast.success("Logged out successfully");
-    navigate("/");
-  };
-
-  const handleWatchlistModalClose = () => {
-    setIsWatchlistModalOpen(false);
-  };
-
   const handleWatchlistModalSuccess = () => {
     setIsWatchlistModalOpen(false);
-    loadWatchlists(); // Refresh watchlists after creating new one
+    loadWatchlists();
     toast.success("Watchlist created successfully!");
   };
 
-  // Handle watchlist success (refresh data)
-  const handleWatchlistSuccess = () => {
-    // Refresh watchlists after adding movie to watchlist
-    loadWatchlists();
-    toast.success("Movie added to watchlist!");
-  };
-
-  // Filter and sort movies
   const filterAndSortMovies = (movies) => {
     if (!Array.isArray(movies)) return [];
 
     let filtered = [...movies];
 
-    // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter((movie) =>
         movie.title?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // Filter by type (if the movie has a type property)
     if (filterBy !== "all") {
       filtered = filtered.filter((movie) => movie.type === filterBy);
     }
 
-    // Sort movies
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "title":
@@ -348,13 +266,11 @@ const UserPage = () => {
     return filtered;
   };
 
-  // Filter and sort watchlists
   const filterAndSortWatchlists = (watchlists) => {
     if (!Array.isArray(watchlists)) return [];
 
     let filtered = [...watchlists];
 
-    // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(
         (watchlist) =>
@@ -365,7 +281,6 @@ const UserPage = () => {
       );
     }
 
-    // Sort watchlists
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "name":
@@ -387,13 +302,11 @@ const UserPage = () => {
     return filtered;
   };
 
-  // Get current movies based on active tab
   const getCurrentMovies = () => {
     switch (activeTab) {
       case "favorites":
         return favorites || [];
       case "watchlist":
-        // Return empty array since we're showing watchlists instead
         return [];
       case "watched":
         return watchedMovies || [];
@@ -402,7 +315,6 @@ const UserPage = () => {
     }
   };
 
-  // Get current count for tabs
   const getTabCount = (tabId) => {
     switch (tabId) {
       case "favorites":
@@ -415,28 +327,6 @@ const UserPage = () => {
         return 0;
     }
   };
-
-  const tabs = [
-    {
-      id: "favorites",
-      label: "Favorites",
-      icon: Heart,
-      count: getTabCount("favorites"),
-    },
-    {
-      id: "watchlist",
-      label: "Watchlists",
-      icon: BookOpen,
-      count: getTabCount("watchlist"),
-    },
-    {
-      id: "watched",
-      label: "Watched",
-      icon: Eye,
-      count: getTabCount("watched"),
-    },
-    { id: "profile", label: "Profile", icon: User, count: null },
-  ];
 
   const renderMovieGrid = (movies) => {
     const filteredMovies = filterAndSortMovies(movies);
@@ -537,7 +427,6 @@ const UserPage = () => {
 
     return (
       <div>
-        {/* Header with Create Button */}
         <div className="flex flex-col sm:flex-row justify-end items-start sm:items-center gap-4 mb-6">
           <Button
             variant="primary"
@@ -550,7 +439,6 @@ const UserPage = () => {
           </Button>
         </div>
 
-        {/* Watchlists Grid */}
         {filteredWatchlists.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {filteredWatchlists.map((watchlist) => (
@@ -671,8 +559,6 @@ const UserPage = () => {
     const userData = profile || user;
     if (!userData) return null;
 
-    const stats = getStats ? getStats() : { totalReviews: 0 };
-
     return (
       <div className="max-w-4xl mx-auto">
         <ProfileEditForm
@@ -686,13 +572,9 @@ const UserPage = () => {
           loading={loading}
         />
 
-        {/* Statistics */}
         <ProfileStatistics />
-
-        {/* Recent Activity */}
         <RecentActivity />
 
-        {/* Account Actions */}
         {watchlists.filter(Boolean).map((watchlist) => (
           <WatchlistCard
             key={watchlist.id || watchlist._id}
@@ -706,21 +588,19 @@ const UserPage = () => {
   };
 
   if (!isAuthenticated) {
-    return null; // Will redirect
+    return null;
   }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
         <UserPageHeader
           activeTab={activeTab}
           user={user}
           profile={profile}
-          onBackClick={() => navigate("/")} // 👈 add this line
+          onBackClick={() => navigate("/")}
         />
 
-        {/* Loading State */}
         {isLoading && (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
@@ -728,41 +608,35 @@ const UserPage = () => {
           </div>
         )}
 
-        {/* Error State */}
-        {error && (
+        {userError && (
           <div className="bg-red-900 border border-red-700 text-red-100 px-4 py-3 rounded mb-6">
-            {error}
+            {userError}
           </div>
         )}
 
-        {/* Tabs */}
         <UserPageTabs
           activeTab={activeTab}
           onTabChange={handleTabChange}
           getTabCount={getTabCount}
         />
 
-        {/* Content */}
         {activeTab === "profile" ? (
           renderProfileSection()
         ) : activeTab === "watchlist" ? (
           renderWatchlistsSection()
         ) : (
           <div>
-            {/* Controls */}
             <MovieControls />
-
-            {/* Movies */}
             {renderMovieGrid(getCurrentMovies())}
           </div>
         )}
       </div>
       <WatchlistModal
         isOpen={isWatchlistModalOpen}
-        onClose={handleWatchlistModalClose}
-        movie={null} // No movie selected, so this will show create new watchlist mode
+        onClose={() => setIsWatchlistModalOpen(false)}
+        movie={null}
         onSuccess={handleWatchlistModalSuccess}
-        createMode={true} // Optional prop to indicate we're in create mode
+        createMode={true}
       />
     </div>
   );
