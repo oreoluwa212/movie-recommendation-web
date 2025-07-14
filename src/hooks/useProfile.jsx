@@ -97,12 +97,28 @@ export const useProfile = () => {
     }
   };
 
-  // Get current user data (prefer full profile, fallback to minimal)
+  // Get current user data - FIXED: Prioritize full profile for avatar
   const getCurrentUser = () => {
-    return profile || minimalProfile;
+    // If we have a full profile, use it (it has avatar and complete data)
+    if (profile) {
+      return profile;
+    }
+    // Only fallback to minimal profile if full profile is not available
+    return minimalProfile;
   };
 
-  // Check if user has avatar
+  // ADDED: Load full profile if we only have minimal profile
+  const ensureFullProfile = async () => {
+    if (!profile && minimalProfile) {
+      try {
+        await loadProfile(false);
+      } catch (error) {
+        console.error('Failed to load full profile:', error);
+      }
+    }
+  };
+
+  // Check if user has avatar - FIXED: Use full profile data
   const hasAvatar = () => {
     const user = getCurrentUser();
     return !!user?.avatar;
@@ -180,6 +196,7 @@ export const useProfile = () => {
     deleteAvatar: handleAvatarDelete,
     refreshProfile,
     refreshMinimalProfile,
+    ensureFullProfileLoaded: ensureFullProfile, // NEW: Helper to ensure full profile is loaded
 
     // Utilities
     getCurrentUser,

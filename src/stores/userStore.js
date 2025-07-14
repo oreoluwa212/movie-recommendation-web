@@ -189,23 +189,6 @@ class ToastManager {
 
 const toastManager = new ToastManager();
 
-// Theme helper functions
-const applyTheme = (theme) => {
-    const root = document.documentElement;
-    if (theme === 'light') {
-        root.classList.remove('dark');
-        root.classList.add('light');
-    } else {
-        root.classList.remove('light');
-        root.classList.add('dark');
-    }
-    localStorage.setItem('theme', theme);
-};
-
-const getStoredTheme = () => {
-    return localStorage.getItem('theme') || 'dark';
-};
-
 export const useUserStore = create(
     persist(
         (set, get) => ({
@@ -221,18 +204,9 @@ export const useUserStore = create(
             lastSync: null,
             isMinimalProfileLoaded: false,
             isMinimalProfileLoading: false,
-
-            // NEW: Theme state
-            theme: getStoredTheme(),
-            isThemeLoading: false,
-
-            // NEW: Avatar state
-            isAvatarLoading: false,
-            avatarError: null,
-
-            // NEW: Profile update state
             isProfileUpdateLoading: false,
             profileUpdateError: null,
+
             // NEW: Add initialization state
             isInitialized: false,
             initializationError: null,
@@ -248,243 +222,6 @@ export const useUserStore = create(
 
             clearError: () => {
                 set({ error: null });
-            },
-
-            getTheme: () => {
-                return get().theme;
-            },
-
-            setTheme: (theme) => {
-                set({ theme });
-                applyTheme(theme);
-            },
-
-            updateTheme: async (newTheme) => {
-                if (!isAuthenticated()) {
-                    // For non-authenticated users, just update locally
-                    set({ theme: newTheme });
-                    applyTheme(newTheme);
-                    return { success: true };
-                }
-
-                try {
-                    set({ isThemeLoading: true });
-
-                    const response = await apiClient.put('/users/profile', {
-                        preferences: { theme: newTheme }
-                    });
-
-                    if (response.data.success) {
-                        // Update theme in store
-                        set({
-                            theme: newTheme,
-                            isThemeLoading: false
-                        });
-
-                        // Update theme in DOM and localStorage
-                        applyTheme(newTheme);
-
-                        // Update profile and minimalProfile if they exist
-                        const currentState = get();
-                        if (currentState.profile) {
-                            set({
-                                profile: {
-                                    ...currentState.profile,
-                                    preferences: {
-                                        ...currentState.profile.preferences,
-                                        theme: newTheme
-                                    }
-                                }
-                            });
-                        }
-
-                        if (currentState.minimalProfile) {
-                            set({
-                                minimalProfile: {
-                                    ...currentState.minimalProfile,
-                                    preferences: {
-                                        ...currentState.minimalProfile.preferences,
-                                        theme: newTheme
-                                    }
-                                }
-                            });
-                        }
-
-                        return { success: true };
-                    } else {
-                        throw new Error(response.data.message || 'Failed to update theme');
-                    }
-                } catch (error) {
-                    const errorMessage = getUserFriendlyError(error, 'update theme');
-                    set({ isThemeLoading: false });
-
-                    // Still apply theme locally even if server update fails
-                    set({ theme: newTheme });
-                    applyTheme(newTheme);
-
-                    return { success: false, error: errorMessage };
-                }
-            },
-
-            // NEW: Avatar upload method
-            uploadAvatar: async (formData) => {
-                if (!isAuthenticated()) {
-                    throw new Error('Please sign in to upload avatar');
-                }
-
-                try {
-                    set({ isAvatarLoading: true, avatarError: null });
-
-                    const response = await apiClient.post('/users/avatar', formData, {
-                        headers: {
-                            'Content-Type': 'multipart/form-data',
-                        },
-                    });
-
-                    if (response.data.success) {
-                        const avatarUrl = response.data.avatar || response.data.user?.avatar;
-
-                        // Update avatar in store
-                        const currentState = get();
-
-                        if (currentState.profile) {
-                            set({
-                                profile: {
-                                    ...currentState.profile,
-                                    avatar: avatarUrl
-                                }
-                            });
-                        }
-
-                        if (currentState.minimalProfile) {
-                            set({
-                                minimalProfile: {
-                                    ...currentState.minimalProfile,
-                                    avatar: avatarUrl
-                                }
-                            });
-                        }
-
-                        set({ isAvatarLoading: false });
-                        return { success: true, avatar: avatarUrl };
-                    } else {
-                        throw new Error(response.data.message || 'Failed to upload avatar');
-                    }
-                } catch (error) {
-                    const errorMessage = getUserFriendlyError(error, 'upload avatar');
-                    set({ isAvatarLoading: false, avatarError: errorMessage });
-                    throw new Error(errorMessage);
-                }
-            },
-
-            // NEW: Avatar delete method
-            deleteAvatar: async () => {
-                if (!isAuthenticated()) {
-                    throw new Error('Please sign in to delete avatar');
-                }
-
-                try {
-                    set({ isAvatarLoading: true, avatarError: null });
-
-                    const response = await apiClient.delete('/users/avatar');
-
-                    if (response.data.success) {
-                        // Update avatar in store
-                        const currentState = get();
-
-                        if (currentState.profile) {
-                            set({
-                                profile: {
-                                    ...currentState.profile,
-                                    avatar: null
-                                }
-                            });
-                        }
-
-                        if (currentState.minimalProfile) {
-                            set({
-                                minimalProfile: {
-                                    ...currentState.minimalProfile,
-                                    avatar: null
-                                }
-                            });
-                        }
-
-                        set({ isAvatarLoading: false });
-                        return { success: true };
-                    } else {
-                        throw new Error(response.data.message || 'Failed to delete avatar');
-                    }
-                } catch (error) {
-                    const errorMessage = getUserFriendlyError(error, 'delete avatar');
-                    set({ isAvatarLoading: false, avatarError: errorMessage });
-                    throw new Error(errorMessage);
-                }
-            },
-
-            // NEW: Profile update method
-            updateProfile: async (profileData) => {
-                if (!isAuthenticated()) {
-                    throw new Error('Please sign in to update profile');
-                }
-
-                try {
-                    set({ isProfileUpdateLoading: true, profileUpdateError: null });
-
-                    const response = await apiClient.put('/users/profile', profileData);
-
-                    if (response.data.success) {
-                        const updatedUser = response.data.user;
-
-                        // Update profile in store
-                        const currentState = get();
-
-                        if (currentState.profile) {
-                            set({
-                                profile: {
-                                    ...currentState.profile,
-                                    ...updatedUser
-                                }
-                            });
-                        }
-
-                        if (currentState.minimalProfile) {
-                            set({
-                                minimalProfile: {
-                                    ...currentState.minimalProfile,
-                                    username: updatedUser.username,
-                                    email: updatedUser.email,
-                                    avatar: updatedUser.avatar,
-                                    preferences: updatedUser.preferences
-                                }
-                            });
-                        }
-
-                        set({ isProfileUpdateLoading: false });
-                        return { success: true, user: updatedUser };
-                    } else {
-                        throw new Error(response.data.message || 'Failed to update profile');
-                    }
-                } catch (error) {
-                    const errorMessage = getUserFriendlyError(error, 'update profile');
-                    set({ isProfileUpdateLoading: false, profileUpdateError: errorMessage });
-                    throw new Error(errorMessage);
-                }
-            },
-
-            // NEW: Initialize theme on app start
-            initializeTheme: () => {
-                const currentState = get();
-                let themeToApply = currentState.theme;
-
-                // If user is authenticated and has profile, use profile theme
-                if (isAuthenticated() && currentState.profile?.preferences?.theme) {
-                    themeToApply = currentState.profile.preferences.theme;
-                    set({ theme: themeToApply });
-                }
-
-                // Apply theme to DOM
-                applyTheme(themeToApply);
             },
 
             // NEW: Single initialization method that should be called once
@@ -702,6 +439,152 @@ export const useUserStore = create(
 
                 requestCache.set(cacheKey, loadPromise);
                 return await loadPromise;
+            },
+
+            updateProfile: async (profileData) => {
+                // Check authentication first
+                if (!isAuthenticated()) {
+                    const errorMessage = 'Please sign in to update your profile';
+                    set({ profileUpdateError: errorMessage });
+                    return { success: false, error: errorMessage };
+                }
+
+                set({ isProfileUpdateLoading: true, profileUpdateError: null });
+
+                try {
+                    // Call your API to update profile
+                    const response = await apiClient.put('/users/profile', profileData);
+
+                    if (response.data.success) {
+                        const updatedProfile = response.data.user;
+
+                        // Update both profile and minimalProfile
+                        set({
+                            profile: {
+                                ...get().profile,
+                                ...updatedProfile
+                            },
+                            minimalProfile: {
+                                ...get().minimalProfile,
+                                username: updatedProfile.username,
+                                email: updatedProfile.email,
+                                bio: updatedProfile.bio,
+                                avatar: updatedProfile.avatar
+                            },
+                            isProfileUpdateLoading: false,
+                            profileUpdateError: null
+                        });
+
+                        return { success: true, data: updatedProfile };
+                    } else {
+                        throw new Error(response.data.message || 'Failed to update profile');
+                    }
+                } catch (error) {
+                    const errorMessage = getUserFriendlyError(error, 'update your profile');
+                    set({
+                        isProfileUpdateLoading: false,
+                        profileUpdateError: errorMessage
+                    });
+                    return { success: false, error: errorMessage };
+                }
+            },
+
+            // Avatar management with loading states
+            isAvatarLoading: false,
+            avatarError: null,
+
+            // Avatar upload function
+            uploadAvatar: async (formData) => {
+                // Check authentication first
+                if (!isAuthenticated()) {
+                    const errorMessage = 'Please sign in to upload an avatar';
+                    set({ avatarError: errorMessage });
+                    return { success: false, error: errorMessage };
+                }
+
+                set({ isAvatarLoading: true, avatarError: null });
+
+                try {
+                    // Call your API to upload avatar
+                    const response = await apiClient.post('/users/avatar', formData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data',
+                        },
+                    });
+
+                    if (response.data.success) {
+                        const avatarUrl = response.data.avatarUrl;
+
+                        // Update both profile and minimalProfile
+                        set({
+                            profile: {
+                                ...get().profile,
+                                avatar: avatarUrl
+                            },
+                            minimalProfile: {
+                                ...get().minimalProfile,
+                                avatar: avatarUrl
+                            },
+                            isAvatarLoading: false,
+                            avatarError: null
+                        });
+
+                        return { success: true, data: { avatarUrl } };
+                    } else {
+                        throw new Error(response.data.message || 'Failed to upload avatar');
+                    }
+                } catch (error) {
+                    const errorMessage = getUserFriendlyError(error, 'upload your avatar');
+                    set({
+                        isAvatarLoading: false,
+                        avatarError: errorMessage
+                    });
+                    return { success: false, error: errorMessage };
+                }
+            },
+
+            // Avatar delete function
+            deleteAvatar: async () => {
+                // Check authentication first
+                if (!isAuthenticated()) {
+                    const errorMessage = 'Please sign in to delete your avatar';
+                    set({ avatarError: errorMessage });
+                    return { success: false, error: errorMessage };
+                }
+
+                set({ isAvatarLoading: true, avatarError: null });
+
+                try {
+                    // Call your API to delete avatar
+                    const response = await apiClient.delete('/users/avatar');
+
+                    if (response.data.success) {
+                        // Update both profile and minimalProfile
+                        set({
+                            profile: {
+                                ...get().profile,
+                                avatar: null
+                            },
+                            minimalProfile: {
+                                ...get().minimalProfile,
+                                avatar: null
+                            },
+                            isAvatarLoading: false,
+                            avatarError: null
+                        });
+
+                        return { success: true };
+                    } else {
+                        throw new Error(response.data.message || 'Failed to delete avatar');
+                    }
+                } catch (error) {
+                    const errorMessage = getUserFriendlyError(error, 'delete your avatar');
+                    set({
+                        isAvatarLoading: false,
+                        avatarError: errorMessage
+                    });
+                    return { success: false, error: errorMessage };
+                }
             },
 
             // IMPROVED: Better sync management
@@ -1164,11 +1047,11 @@ export const useUserStore = create(
                 watchlists: state.watchlists,
                 reviews: state.reviews,
                 profile: state.profile,
-                theme: state.theme,
                 minimalProfile: state.minimalProfile,
                 lastSync: state.lastSync,
                 isMinimalProfileLoaded: state.isMinimalProfileLoaded,
                 isInitialized: state.isInitialized
+                // Don't persist loading states
             })
         }
     )

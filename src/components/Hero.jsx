@@ -181,13 +181,24 @@ const Hero = ({ movies, isLoading = false }) => {
             <Film className="h-24 w-24 text-gray-600" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+
+        {/* Enhanced Black Overlay for Better Text Visibility */}
+        <div className="absolute inset-0 bg-black/40"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/20"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent"></div>
       </div>
 
       {/* Content */}
       <div className="absolute bottom-0 left-0 w-full z-10 px-10 pb-16">
         <div className="max-w-4xl">
-          <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
+          {/* Title with additional text shadow for extra visibility */}
+          <h1
+            className="text-4xl md:text-6xl font-bold text-white mb-4 drop-shadow-2xl"
+            style={{
+              textShadow:
+                "2px 2px 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.6)",
+            }}
+          >
             {movie.title}
           </h1>
 
@@ -195,20 +206,23 @@ const Hero = ({ movies, isLoading = false }) => {
           <div className="flex items-center space-x-4 mb-4 text-gray-300">
             {getRating() && (
               <div className="flex items-center space-x-1">
-                <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                <span>{getRating()}</span>
+                <Star className="h-4 w-4 text-yellow-400 fill-current drop-shadow-lg" />
+                <span className="drop-shadow-lg">{getRating()}</span>
               </div>
             )}
             {getReleaseYear() && (
               <div className="flex items-center space-x-1">
-                <Calendar className="h-4 w-4" />
-                <span>{getReleaseYear()}</span>
+                <Calendar className="h-4 w-4 drop-shadow-lg" />
+                <span className="drop-shadow-lg">{getReleaseYear()}</span>
               </div>
             )}
           </div>
 
-          {/* Overview */}
-          <p className="text-lg text-gray-300 mb-8 line-clamp-3 max-w-2xl">
+          {/* Overview with text shadow */}
+          <p
+            className="text-lg text-gray-300 mb-8 line-clamp-3 max-w-2xl drop-shadow-lg"
+            style={{ textShadow: "1px 1px 2px rgba(0,0,0,0.8)" }}
+          >
             {movie.overview}
           </p>
 
@@ -227,7 +241,7 @@ const Hero = ({ movies, isLoading = false }) => {
                 )
               }
               disabled={loadingTrailer}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-red-600 hover:bg-red-700 shadow-lg"
             >
               {loadingTrailer ? "Loading..." : "Watch Trailer"}
             </Button>
@@ -237,6 +251,7 @@ const Hero = ({ movies, isLoading = false }) => {
               variant="outline"
               size="large"
               leftIcon={<Info className="h-5 w-5" />}
+              className="shadow-lg"
             >
               More Info
             </Button>
@@ -244,8 +259,8 @@ const Hero = ({ movies, isLoading = false }) => {
 
           {/* Auth Prompt for Non-Authenticated Users */}
           {!isAuthenticated && (
-            <div className="mt-6 p-4 bg-black/60 rounded-lg border border-gray-700">
-              <p className="text-gray-300 mb-3">
+            <div className="mt-6 p-4 bg-black/80 rounded-lg border border-gray-700 backdrop-blur-sm">
+              <p className="text-gray-300 mb-3 drop-shadow-lg">
                 Sign in to access your personalized movie experience
               </p>
               <AuthButtons
@@ -266,8 +281,8 @@ const Hero = ({ movies, isLoading = false }) => {
             <button
               key={index}
               onClick={() => setCurrentIndex(index)}
-              className={`w-2 h-2 rounded-full transition-all ${
-                index === currentIndex ? "bg-red-600" : "bg-white/50"
+              className={`w-2 h-2 rounded-full transition-all shadow-lg ${
+                index === currentIndex ? "bg-red-600" : "bg-white/70"
               }`}
             />
           ))}

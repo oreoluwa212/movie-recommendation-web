@@ -59,7 +59,6 @@ const UserPage = () => {
   const userStore = useUserStore();
 
   const {
-    watchlists,
     isLoading: isLoadingWatchlists,
     error: watchlistError,
     loadWatchlists,
@@ -67,8 +66,11 @@ const UserPage = () => {
   } = useWatchlistStore();
 
   const {
+    watchlists = [],
+    getStats = [],
     favorites = [],
     watchedMovies = [],
+    reviews = [],
     profile = null,
     removeFromFavorites,
     removeFromWatched,
@@ -627,10 +629,14 @@ const UserPage = () => {
           onAvatarDelete={handleAvatarDelete}
           onThemeChange={handleThemeChange}
         />
-
-        <ProfileStatistics />
+        <ProfileStatistics
+          favorites={favorites}
+          watchlists={watchlists}
+          watchedMovies={watchedMovies}
+          reviews={reviews}
+          stats={getStats()} // This should contain the backend stats
+        />{" "}
         <RecentActivity />
-
         {watchlists.filter(Boolean).map((watchlist) => (
           <WatchlistCard
             key={watchlist.id || watchlist._id}

@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import Button from "./ui/Button";
 import { useProfile } from "../hooks/useProfile";
-import { useTheme } from "../hooks/useTheme";
 
 const ProfileEditForm = () => {
   const [isEditing, setIsEditing] = useState(false);
@@ -30,17 +29,24 @@ const ProfileEditForm = () => {
 
   // Use our custom hooks
   const {
+    profile,
+    minimalProfile,
     currentUser,
     userStats,
     isProfileUpdateLoading,
     isAvatarLoading,
+    isLoading,
     updateProfile,
     uploadAvatar,
     deleteAvatar,
     hasAvatar,
+    ensureFullProfileLoaded,
   } = useProfile();
 
-  const { isThemeLoading, toggleTheme, isDark } = useTheme();
+  // Load full profile on mount if we only have minimal profile
+  useEffect(() => {
+    ensureFullProfileLoaded();
+  }, []);
 
   // Initialize form when user data changes or editing starts
   useEffect(() => {
@@ -137,11 +143,6 @@ const ProfileEditForm = () => {
     fileInputRef.current?.click();
   };
 
-  // Theme toggle handler
-  const handleThemeToggle = async () => {
-    await toggleTheme();
-  };
-
   const formatRating = (rating) => {
     if (!rating) return "0.0";
     const numRating = typeof rating === "number" ? rating : parseFloat(rating);
@@ -149,7 +150,7 @@ const ProfileEditForm = () => {
   };
 
   // Return loading state if no user data
-  if (!currentUser) {
+  if (isLoading || !currentUser) {
     return (
       <div className="bg-gray-800 rounded-lg p-6 mb-8">
         <div className="animate-pulse">
@@ -163,6 +164,14 @@ const ProfileEditForm = () => {
       </div>
     );
   }
+
+  // Debug info (remove in production)
+  console.log("Profile data:", {
+    profile,
+    minimalProfile,
+    currentUser,
+    hasAvatar,
+  });
 
   const formFields = [
     {
@@ -285,7 +294,7 @@ const ProfileEditForm = () => {
               )}
             </div>
 
-            {/* Drag and Drop Zone - Now with click handler */}
+            {/* Drag and Drop Zone */}
             <div
               className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer ${
                 dragOver
@@ -320,37 +329,6 @@ const ProfileEditForm = () => {
         <div className="flex items-center gap-2 mb-4">
           <Palette className="h-5 w-5 text-gray-400" />
           <h3 className="text-lg font-semibold text-white">Appearance</h3>
-        </div>
-
-        <div className="flex items-center justify-between p-4 bg-gray-700 rounded-lg">
-          <div className="flex items-center space-x-3">
-            {isDark ? (
-              <Moon className="h-5 w-5 text-blue-400" />
-            ) : (
-              <Sun className="h-5 w-5 text-yellow-400" />
-            )}
-            <div>
-              <p className="font-medium text-white">Theme Mode</p>
-              <p className="text-sm text-gray-400">
-                Current: {isDark ? "Dark" : "Light"} Mode
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="secondary"
-            size="small"
-            onClick={handleThemeToggle}
-            loading={isThemeLoading}
-            leftIcon={
-              isDark ? (
-                <Sun className="h-4 w-4" />
-              ) : (
-                <Moon className="h-4 w-4" />
-              )
-            }
-          >
-            Switch to {isDark ? "Light" : "Dark"}
-          </Button>
         </div>
       </div>
 
