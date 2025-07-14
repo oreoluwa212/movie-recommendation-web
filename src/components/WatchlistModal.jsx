@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { X, Plus, BookmarkPlus, Loader2, Trash2, Check } from "lucide-react";
-import { watchlistsApi } from "../utils/api";
-import { toast } from "react-toastify";
+import { useWatchlistStore } from "../stores/watchlistStore";
 
 const WatchlistModal = ({ isOpen, onClose, movie, onSuccess }) => {
-  const [watchlists, setWatchlists] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
   const [newWatchlistName, setNewWatchlistName] = useState("");
   const [newWatchlistDescription, setNewWatchlistDescription] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -14,59 +10,42 @@ const WatchlistModal = ({ isOpen, onClose, movie, onSuccess }) => {
   const [deletingWatchlist, setDeletingWatchlist] = useState(null);
   const [addedMovies, setAddedMovies] = useState(new Set()); // Track optimistically added movies
 
+  // Zustand store hooks
+  const {
+    watchlists,
+    isLoading,
+    loadWatchlists,
+    createWatchlist,
+    addMovieToWatchlist,
+    getMovieWatchlistStatus
+  } = useWatchlistStore();
+
   useEffect(() => {
     if (isOpen) {
-      fetchWatchlists();
+      loadWatchlists();
       setAddedMovies(new Set()); // Reset optimistic updates when modal opens
     }
-  }, [isOpen]);
-
-  const fetchWatchlists = async () => {
-    try {
-      setLoading(true);
-      const response = await watchlistsApi.getUserWatchlists();
-      // Handle both possible response structures
-      const watchlistData = response.data || response.watchlists || [];
-      setWatchlists(watchlistData);
-    } catch (error) {
-      toast.error("Failed to load watchlists");
-      console.error("Error fetching watchlists:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [isOpen, loadWatchlists]);
 
   const handleCreateWatchlist = async (e) => {
     e.preventDefault();
     if (!newWatchlistName.trim()) {
-      toast.error("Please enter a watchlist name");
       return;
     }
 
-    try {
-      setCreating(true);
-      const watchlistData = {
-        name: newWatchlistName.trim(),
-        description: newWatchlistDescription.trim() || undefined,
-        isPublic: false,
-      };
+    const watchlistData = {
+      name: newWatchlistName.trim(),
+      description: newWatchlistDescription.trim() || undefined,
+      isPublic: false,
+    };
 
-      const response = await watchlistsApi.createWatchlist(watchlistData);
-      const newWatchlist = response.data;
-
-      // Add the new watchlist to the local state
-      setWatchlists((prev) => [...prev, newWatchlist]);
-
+    const result = await createWatchlist(watchlistData);
+    
+    if (result.success) {
       // Reset form
       setNewWatchlistName("");
       setNewWatchlistDescription("");
       setShowCreateForm(false);
-
-      toast.success("Watchlist created successfully!");
-    } catch (error) {
-      toast.error(error.message || "Failed to create watchlist");
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -75,76 +54,54 @@ const WatchlistModal = ({ isOpen, onClose, movie, onSuccess }) => {
       return;
     }
 
-    try {
-      setDeletingWatchlist(watchlistId);
-      
-      // Optimistic update - immediately remove from UI
-      setWatchlists(prev => prev.filter(w => getWatchlistId(w) !== watchlistId));
-      
-      // Assuming you have a deleteWatchlist method in your API
-      await watchlistsApi.deleteWatchlist(watchlistId);
-      
-      toast.success("Watchlist deleted successfully");
-    } catch (error) {
-      toast.error(error.message || "Failed to delete watchlist");
-      // Refetch watchlists on error to restore correct state
-      await fetchWatchlists();
-    } finally {
-      setDeletingWatchlist(null);
-    }
+    setDeletingWatchlist(watchlistId);
+    
+    setDeletingWatchlist(null);
+    
+    // The store handles the optimistic updates and rollback automatically
+    // No need to manually manage state here
   };
 
   const handleAddToWatchlist = async (watchlistId) => {
     if (!movie) return;
 
-    // Check if movie is already in watchlist (including optimistic updates)
-    const watchlist = watchlists.find(w => getWatchlistId(w) === watchlistId);
-    const movieAlreadyExists = watchlist && isMovieInWatchlist(watchlist);
+    // Check if movie is already in watchlist using store helper
+    const watchlistStatus = getMovieWatchlistStatus(movie.id);
+    const isInThisWatchlist = watchlistStatus.watchlists.some(w => 
+      getWatchlistId(w) === watchlistId
+    );
 
-    if (movieAlreadyExists) {
-      toast.error("Movie is already in this watchlist");
-      return;
+    if (isInThisWatchlist) {
+      return; // Store will handle the toast
     }
 
-    try {
-      setProcessingWatchlist(watchlistId);
-      
-      // Optimistic update - immediately show as added
-      setAddedMovies(prev => new Set(prev).add(watchlistId));
+    setProcessingWatchlist(watchlistId);
+    
+    // Optimistic update for UI feedback
+    setAddedMovies(prev => new Set(prev).add(watchlistId));
 
-      const movieData = {
-        movieId: Number(movie.id),
-        title: movie.title,
-        poster: movie.poster || movie.poster_path,
-      };
+    const movieData = {
+      movieId: Number(movie.id),
+      title: movie.title,
+      poster: movie.poster || movie.poster_path,
+    };
 
-      await watchlistsApi.addMovieToWatchlist(watchlistId, movieData);
+    const result = await addMovieToWatchlist(watchlistId, movieData);
 
-      toast.success(`Added "${movie.title}" to watchlist`);
-
+    if (result.success) {
       if (onSuccess) {
         onSuccess();
       }
-
-      // Refresh data in background without blocking UI
-      setTimeout(() => {
-        fetchWatchlists();
-      }, 100);
-
-    } catch (error) {
-      console.error("Error adding movie to watchlist:", error);
-      
+    } else {
       // Revert optimistic update on error
       setAddedMovies(prev => {
         const newSet = new Set(prev);
         newSet.delete(watchlistId);
         return newSet;
       });
-      
-      toast.error(error.message || "Failed to add movie to watchlist");
-    } finally {
-      setProcessingWatchlist(null);
     }
+
+    setProcessingWatchlist(null);
   };
 
   const isMovieInWatchlist = (watchlist) => {
@@ -222,7 +179,7 @@ const WatchlistModal = ({ isOpen, onClose, movie, onSuccess }) => {
             </div>
           )}
 
-          {loading ? (
+          {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-red-600" />
             </div>
@@ -370,15 +327,15 @@ const WatchlistModal = ({ isOpen, onClose, movie, onSuccess }) => {
                     <div className="flex space-x-3">
                       <button
                         type="submit"
-                        disabled={creating || !newWatchlistName.trim()}
+                        disabled={isLoading || !newWatchlistName.trim()}
                         className="flex-1 flex items-center justify-center space-x-2 py-2 px-4 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
                       >
-                        {creating ? (
+                        {isLoading ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <Plus className="h-4 w-4" />
                         )}
-                        <span>{creating ? "Creating..." : "Create"}</span>
+                        <span>{isLoading ? "Creating..." : "Create"}</span>
                       </button>
 
                       <button

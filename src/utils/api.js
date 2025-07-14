@@ -662,6 +662,90 @@ export const userApi = {
     },
 };
 
+// Watchlists API functions with selective queuing
+export const watchlistsApi = {
+    createWatchlist: async (watchlistData) => {
+        try {
+            const response = await api.post('/watchlists', watchlistData);
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || 'Failed to create watchlist');
+        }
+    },
+
+    getUserWatchlists: async () => {
+        const cacheKey = 'user-watchlists';
+        return makeRequest(
+            async () => {
+                const response = await api.get('/watchlists');
+                return response.data;
+            },
+            cacheKey,
+            'none'
+        );
+    },
+
+    getWatchlistById: async (watchlistId) => {
+        const cacheKey = `watchlist-${watchlistId}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/watchlists/${watchlistId}`);
+                return response.data;
+            },
+            cacheKey,
+            'light'
+        );
+    },
+
+    updateWatchlist: async (watchlistId, watchlistData) => {
+        try {
+            const response = await api.put(`/watchlists/${watchlistId}`, watchlistData);
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || 'Failed to update watchlist');
+        }
+    },
+
+    deleteWatchlist: async (watchlistId) => {
+        try {
+            const response = await api.delete(`/watchlists/${watchlistId}`);
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || 'Failed to delete watchlist');
+        }
+    },
+
+    addMovieToWatchlist: async (watchlistId, movieData) => {
+        try {
+            const response = await api.post(`/watchlists/${watchlistId}/movies`, movieData);
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || 'Failed to add movie to watchlist');
+        }
+    },
+
+    removeMovieFromWatchlist: async (watchlistId, movieId) => {
+        try {
+            const response = await api.delete(`/watchlists/${watchlistId}/movies/${movieId}`);
+            return response.data;
+        } catch (error) {
+            throw new Error(error.response?.data?.message || 'Failed to remove movie from watchlist');
+        }
+    },
+
+    getPublicWatchlists: async (page = 1, limit = 10) => {
+        const cacheKey = `public-watchlists-${page}-${limit}`;
+        return makeRequest(
+            async () => {
+                const response = await api.get(`/watchlists/public/all?page=${page}&limit=${limit}`);
+                return response.data;
+            },
+            cacheKey,
+            'light'
+        );
+    }
+};
+
 // Validation function for review data
 function validateReviewData(reviewData) {
     if (!reviewData) {
@@ -888,90 +972,6 @@ export const reviewsApi = {
                 apiCache.delete(key);
             }
         }
-    }
-};
-
-// Watchlists API functions with selective queuing
-export const watchlistsApi = {
-    createWatchlist: async (watchlistData) => {
-        try {
-            const response = await api.post('/watchlists', watchlistData);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to create watchlist');
-        }
-    },
-
-    getUserWatchlists: async () => {
-        const cacheKey = 'user-watchlists';
-        return makeRequest(
-            async () => {
-                const response = await api.get('/watchlists');
-                return response.data;
-            },
-            cacheKey,
-            'none'
-        );
-    },
-
-    getWatchlistById: async (watchlistId) => {
-        const cacheKey = `watchlist-${watchlistId}`;
-        return makeRequest(
-            async () => {
-                const response = await api.get(`/watchlists/${watchlistId}`);
-                return response.data;
-            },
-            cacheKey,
-            'light'
-        );
-    },
-
-    updateWatchlist: async (watchlistId, watchlistData) => {
-        try {
-            const response = await api.put(`/watchlists/${watchlistId}`, watchlistData);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to update watchlist');
-        }
-    },
-
-    deleteWatchlist: async (watchlistId) => {
-        try {
-            const response = await api.delete(`/watchlists/${watchlistId}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to delete watchlist');
-        }
-    },
-
-    addMovieToWatchlist: async (watchlistId, movieData) => {
-        try {
-            const response = await api.post(`/watchlists/${watchlistId}/movies`, movieData);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to add movie to watchlist');
-        }
-    },
-
-    removeMovieFromWatchlist: async (watchlistId, movieId) => {
-        try {
-            const response = await api.delete(`/watchlists/${watchlistId}/movies/${movieId}`);
-            return response.data;
-        } catch (error) {
-            throw new Error(error.response?.data?.message || 'Failed to remove movie from watchlist');
-        }
-    },
-
-    getPublicWatchlists: async (page = 1, limit = 10) => {
-        const cacheKey = `public-watchlists-${page}-${limit}`;
-        return makeRequest(
-            async () => {
-                const response = await api.get(`/watchlists/public/all?page=${page}&limit=${limit}`);
-                return response.data;
-            },
-            cacheKey,
-            'light'
-        );
     }
 };
 
