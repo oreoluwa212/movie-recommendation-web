@@ -11,7 +11,7 @@ const HeroSkeleton = () => (
   <div className="relative h-96 overflow-hidden bg-gray-800">
     <div className="animate-pulse absolute inset-0 bg-gradient-to-r from-gray-800 to-gray-700" />
 
-    <div className="relative z-10 bottom-0 left-0 w-full p-8">
+    <div className="relative z-10 bottom-0 left-0 w-full px-12 sm:px-16 md:px-20 lg:px-24 xl:px-32 py-8">
       <div className="max-w-2xl space-y-4">
         <div className="animate-pulse h-12 bg-gray-700 rounded-lg w-3/4" />
         <div className="flex items-center space-x-4">
@@ -85,7 +85,7 @@ const Hero = ({ movies, isLoading = false }) => {
   if (!movies || movies.length === 0) {
     return (
       <div className="relative h-96 bg-gradient-to-r from-gray-900 to-black flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center px-12 sm:px-16 md:px-20 lg:px-24 xl:px-32">
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
             Welcome to StreamVibe
           </h1>
@@ -188,12 +188,12 @@ const Hero = ({ movies, isLoading = false }) => {
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent"></div>
       </div>
 
-      {/* Content */}
-      <div className="absolute bottom-0 left-0 w-full z-10 px-10 pb-16">
-        <div className="max-w-4xl">
+      {/* Content with improved spacing */}
+      <div className="absolute bottom-0 left-0 w-full z-10 px-12 sm:px-16 md:px-20 lg:px-24 xl:px-32 2xl:px-40 pb-16 sm:pb-20 md:pb-24 lg:pb-28">
+        <div className="max-w-4xl mx-auto lg:mx-0">
           {/* Title with additional text shadow for extra visibility */}
           <h1
-            className="text-4xl md:text-6xl font-bold text-white mb-4 drop-shadow-2xl"
+            className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 drop-shadow-2xl"
             style={{
               textShadow:
                 "2px 2px 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.6)",
@@ -220,14 +220,14 @@ const Hero = ({ movies, isLoading = false }) => {
 
           {/* Overview with text shadow */}
           <p
-            className="text-lg text-gray-300 mb-8 line-clamp-3 max-w-2xl drop-shadow-lg"
+            className="text-base sm:text-lg text-gray-300 mb-6 sm:mb-8 line-clamp-3 max-w-2xl drop-shadow-lg"
             style={{ textShadow: "1px 1px 2px rgba(0,0,0,0.8)" }}
           >
             {movie.overview}
           </p>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap gap-4 mb-4">
+          <div className="flex flex-wrap gap-3 sm:gap-4 mb-4">
             {/* Watch Trailer Button - Always show */}
             <Button
               onClick={handleWatchTrailer}
@@ -259,8 +259,8 @@ const Hero = ({ movies, isLoading = false }) => {
 
           {/* Auth Prompt for Non-Authenticated Users */}
           {!isAuthenticated && (
-            <div className="mt-6 p-4 bg-black/80 rounded-lg border border-gray-700 backdrop-blur-sm">
-              <p className="text-gray-300 mb-3 drop-shadow-lg">
+            <div className="mt-6 p-4 bg-black/80 rounded-lg border border-gray-700 backdrop-blur-sm max-w-md">
+              <p className="text-gray-300 mb-3 drop-shadow-lg text-sm sm:text-base">
                 Sign in to access your personalized movie experience
               </p>
               <AuthButtons
@@ -274,16 +274,15 @@ const Hero = ({ movies, isLoading = false }) => {
         </div>
       </div>
 
-      {/* Carousel Indicators */}
+      {/* Carousel Indicators - moved further from edge */}
       {movies.length > 1 && (
-        <div className="absolute bottom-4 right-8 flex space-x-2">
+        <div className="absolute bottom-6 sm:bottom-8 right-6 sm:right-8 md:right-12 lg:right-16 xl:right-20 flex space-x-2">
           {movies.map((_, index) => (
             <button
               key={index}
               onClick={() => setCurrentIndex(index)}
-              className={`w-2 h-2 rounded-full transition-all shadow-lg ${
-                index === currentIndex ? "bg-red-600" : "bg-white/70"
-              }`}
+              className={`w-2 h-2 rounded-full transition-all shadow-lg ${index === currentIndex ? "bg-red-600" : "bg-white/70"
+                }`}
             />
           ))}
         </div>

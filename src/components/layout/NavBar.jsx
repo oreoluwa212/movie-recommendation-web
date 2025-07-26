@@ -15,7 +15,7 @@ import {
 import { useAuthStore } from "../../stores/authStore";
 import { AuthModal } from "../AuthComponent";
 
-const Navbar = () => {
+const Navbar = ({ onModalStateChange }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -34,10 +34,23 @@ const Navbar = () => {
         setSearchQuery(query);
       }
     } else {
-      // Clear search query when navigating away from search page
       setSearchQuery("");
     }
   }, [location]);
+
+  // Notify parent component about modal state changes
+  useEffect(() => {
+    if (onModalStateChange) {
+      onModalStateChange(showAuthModal);
+    }
+  }, [showAuthModal, onModalStateChange]);
+
+  // Close mobile menu when modal opens
+  useEffect(() => {
+    if (showAuthModal) {
+      setIsMenuOpen(false);
+    }
+  }, [showAuthModal]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -68,11 +81,16 @@ const Navbar = () => {
   const handleAuthModalOpen = (mode) => {
     setAuthMode(mode);
     setShowAuthModal(true);
-    setIsMenuOpen(false); // Close mobile menu if open
+    setIsMenuOpen(false);
   };
 
   // Handle auth modal closing
   const handleAuthModalClose = () => {
+    setShowAuthModal(false);
+  };
+
+  // Handle successful auth - close modal and redirect
+  const handleAuthSuccess = () => {
     setShowAuthModal(false);
   };
 
@@ -83,20 +101,20 @@ const Navbar = () => {
     { path: "/search", label: "Search", icon: Search },
   ];
 
-  // Fixed user links to match UserPage routes
   const userLinks = [
     { path: "/favorites", label: "Favorites", icon: Heart },
     { path: "/watched", label: "Watched", icon: Eye },
-    { path: "/watchlist", label: "Watchlist", icon: BookOpen }, // Fixed: singular, not plural
+    { path: "/watchlist", label: "Watchlist", icon: BookOpen },
   ];
 
   return (
     <>
+      {/* Fixed navbar with proper z-index */}
       <nav className="bg-black/90 backdrop-blur-md sticky top-0 z-50 border-b border-gray-800">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
-            <Link to="/" className="flex items-center space-x-2">
+            <Link to="/" className="flex items-center space-x-2 z-10">
               <Film className="h-8 w-8 text-red-600" />
               <span className="text-xl font-bold text-white">StreamVibe</span>
             </Link>
@@ -107,11 +125,10 @@ const Navbar = () => {
                 <Link
                   key={path}
                   to={path}
-                  className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${
-                    isActive(path)
+                  className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${isActive(path)
                       ? "text-red-500 bg-red-500/10"
                       : "text-gray-300 hover:text-white hover:bg-gray-800"
-                  }`}
+                    }`}
                 >
                   <Icon className="h-4 w-4" />
                   <span>{label}</span>
@@ -153,11 +170,10 @@ const Navbar = () => {
                     <Link
                       key={path}
                       to={path}
-                      className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${
-                        isActive(path)
+                      className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${isActive(path)
                           ? "text-red-500 bg-red-500/10"
                           : "text-gray-300 hover:text-white hover:bg-gray-800"
-                      }`}
+                        }`}
                     >
                       <Icon className="h-4 w-4" />
                       <span className="hidden lg:inline">{label}</span>
@@ -170,7 +186,7 @@ const Navbar = () => {
                         {user?.username || "User"}
                       </span>
                     </button>
-                    <div className="absolute right-0 mt-2 w-48 bg-gray-900 rounded-lg shadow-lg border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                    <div className="absolute right-0 mt-2 w-48 bg-gray-900 rounded-lg shadow-lg border border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-[60]">
                       <Link
                         to="/profile"
                         className="block px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white first:rounded-t-lg"
@@ -191,12 +207,14 @@ const Navbar = () => {
                   <button
                     onClick={() => handleAuthModalOpen("login")}
                     className="px-4 py-2 text-gray-300 hover:text-white transition-colors"
+                    type="button"
                   >
                     Login
                   </button>
                   <button
                     onClick={() => handleAuthModalOpen("register")}
                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    type="button"
                   >
                     Sign Up
                   </button>
@@ -207,7 +225,8 @@ const Navbar = () => {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="xl:hidden p-2 rounded-lg hover:bg-gray-800 transition-colors"
+              className="xl:hidden p-2 rounded-lg hover:bg-gray-800 transition-colors z-10"
+              type="button"
             >
               {isMenuOpen ? (
                 <X className="h-6 w-6" />
@@ -218,8 +237,8 @@ const Navbar = () => {
           </div>
 
           {/* Mobile Menu */}
-          {isMenuOpen && (
-            <div className="xl:hidden py-4 border-t border-gray-800">
+          {isMenuOpen && !showAuthModal && (
+            <div className="xl:hidden py-4 border-t border-gray-800 bg-black/90 backdrop-blur-md">
               {/* Mobile Search */}
               <form onSubmit={handleSearch} className="mb-4">
                 <div className="relative">
@@ -250,11 +269,10 @@ const Navbar = () => {
                     key={path}
                     to={path}
                     onClick={() => setIsMenuOpen(false)}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                      isActive(path)
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${isActive(path)
                         ? "text-red-500 bg-red-500/10"
                         : "text-gray-300 hover:text-white hover:bg-gray-800"
-                    }`}
+                      }`}
                   >
                     <Icon className="h-4 w-4" />
                     <span>{label}</span>
@@ -268,11 +286,10 @@ const Navbar = () => {
                         key={path}
                         to={path}
                         onClick={() => setIsMenuOpen(false)}
-                        className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                          isActive(path)
+                        className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${isActive(path)
                             ? "text-red-500 bg-red-500/10"
                             : "text-gray-300 hover:text-white hover:bg-gray-800"
-                        }`}
+                          }`}
                       >
                         <Icon className="h-4 w-4" />
                         <span>{label}</span>
@@ -289,6 +306,7 @@ const Navbar = () => {
                     <button
                       onClick={handleLogout}
                       className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800 transition-colors w-full text-left"
+                      type="button"
                     >
                       <User className="h-4 w-4" />
                       <span>Logout</span>
@@ -299,12 +317,14 @@ const Navbar = () => {
                     <button
                       onClick={() => handleAuthModalOpen("login")}
                       className="block w-full text-left px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+                      type="button"
                     >
                       Login
                     </button>
                     <button
                       onClick={() => handleAuthModalOpen("register")}
                       className="block w-full px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-center"
+                      type="button"
                     >
                       Sign Up
                     </button>
@@ -316,12 +336,17 @@ const Navbar = () => {
         </div>
       </nav>
 
-      {/* Auth Modal */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={handleAuthModalClose}
-        initialMode={authMode}
-      />
+      {/* Auth Modal - Render in a portal-like manner */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-[100]">
+          <AuthModal
+            isOpen={showAuthModal}
+            onClose={handleAuthModalClose}
+            initialMode={authMode}
+            onSuccess={handleAuthSuccess}
+          />
+        </div>
+      )}
     </>
   );
 };

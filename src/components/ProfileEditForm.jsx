@@ -6,8 +6,6 @@ import {
   Camera,
   Trash2,
   Upload,
-  Sun,
-  Moon,
   User,
   Mail,
   FileText,
@@ -29,8 +27,6 @@ const ProfileEditForm = () => {
 
   // Use our custom hooks
   const {
-    profile,
-    minimalProfile,
     currentUser,
     userStats,
     isProfileUpdateLoading,
@@ -39,9 +35,11 @@ const ProfileEditForm = () => {
     updateProfile,
     uploadAvatar,
     deleteAvatar,
-    hasAvatar,
     ensureFullProfileLoaded,
   } = useProfile();
+
+  // Calculate hasAvatar from currentUser data
+  const hasAvatar = currentUser?.avatar && currentUser.avatar.trim() !== "";
 
   // Load full profile on mount if we only have minimal profile
   useEffect(() => {
@@ -163,15 +161,7 @@ const ProfileEditForm = () => {
         </div>
       </div>
     );
-  }
-
-  // Debug info (remove in production)
-  console.log("Profile data:", {
-    profile,
-    minimalProfile,
-    currentUser,
-    hasAvatar,
-  });
+  };
 
   const formFields = [
     {
@@ -253,12 +243,18 @@ const ProfileEditForm = () => {
                   src={currentUser.avatar}
                   alt="Profile"
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback to initials if image fails to load
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
                 />
-              ) : (
-                <div className="text-gray-400 text-2xl font-bold">
-                  {currentUser.username?.charAt(0)?.toUpperCase() || "?"}
-                </div>
-              )}
+              ) : null}
+              <div
+                className={`${hasAvatar ? 'hidden' : 'flex'} w-full h-full items-center justify-center text-gray-400 text-2xl font-bold`}
+              >
+                {currentUser.username?.charAt(0)?.toUpperCase() || "?"}
+              </div>
             </div>
 
             {isAvatarLoading && (
@@ -278,7 +274,7 @@ const ProfileEditForm = () => {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isAvatarLoading}
               >
-                Upload Photo
+                {hasAvatar ? "Change Photo" : "Upload Photo"}
               </Button>
 
               {hasAvatar && (
@@ -296,11 +292,10 @@ const ProfileEditForm = () => {
 
             {/* Drag and Drop Zone */}
             <div
-              className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer ${
-                dragOver
-                  ? "border-red-500 bg-red-500 bg-opacity-10"
-                  : "border-gray-600 hover:border-gray-500"
-              }`}
+              className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer ${dragOver
+                ? "border-red-500 bg-red-500 bg-opacity-10"
+                : "border-gray-600 hover:border-gray-500"
+                }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -330,6 +325,7 @@ const ProfileEditForm = () => {
           <Palette className="h-5 w-5 text-gray-400" />
           <h3 className="text-lg font-semibold text-white">Appearance</h3>
         </div>
+        {/* Add theme controls here if needed */}
       </div>
 
       {/* Form Fields */}
@@ -390,19 +386,19 @@ const ProfileEditForm = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center p-4 bg-gray-700 rounded-lg">
             <div className="text-2xl font-bold text-red-400">
-              {userStats.totalFavorites || 0}
+              {userStats?.totalFavorites || currentUser?.favoriteMovies?.length || 0}
             </div>
             <div className="text-sm text-gray-400">Favorites</div>
           </div>
           <div className="text-center p-4 bg-gray-700 rounded-lg">
             <div className="text-2xl font-bold text-blue-400">
-              {userStats.totalWatched || 0}
+              {userStats?.totalWatched || currentUser?.watchedMovies?.length || 0}
             </div>
             <div className="text-sm text-gray-400">Watched</div>
           </div>
           <div className="text-center p-4 bg-gray-700 rounded-lg">
             <div className="text-2xl font-bold text-green-400">
-              {formatRating(userStats.averageRating)}
+              {formatRating(userStats?.averageRating || currentUser?.stats?.averageRating)}
             </div>
             <div className="text-sm text-gray-400">Avg Rating</div>
           </div>

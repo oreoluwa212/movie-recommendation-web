@@ -9,7 +9,6 @@ import { useAuthStore } from "../../stores/authStore";
 import { AuthContainer } from "../../components/auth/AuthContainer";
 import { AuthCard } from "../../components/auth/AuthCard";
 import { AuthHeader } from "../../components/auth/AuthHeader";
-import { DemoCredentials } from "../../components/auth/DemoCredentials";
 import { SocialLoginButton } from "../../components/auth/SocialLoginButton";
 import { GoogleIcon } from "../../components/auth/GoogleIcon";
 import { FormDivider } from "../../components/auth/FormDivider";
@@ -44,9 +43,9 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-    const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validate form
     const validationErrors = validateForm(formData, ['email', 'password']);
     if (Object.keys(validationErrors).length > 0) {
@@ -92,14 +91,12 @@ const Login = () => {
   return (
     <AuthContainer>
       <AuthCard>
-        <AuthHeader 
-          title="Welcome Back" 
-          subtitle="Sign in to your account" 
+        <AuthHeader
+          title="Sign In"
+          subtitle="Welcome back to StreamVibe"
         />
 
         <div className="p-6 space-y-6">
-          <DemoCredentials />
-
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-4">
               <SocialLoginButton
@@ -152,7 +149,7 @@ const Login = () => {
           <div className="text-center pt-4 border-t border-gray-700">
             <p className="text-gray-400">
               Don't have an account?{" "}
-              <AuthLink to="/register">Sign Up</AuthLink>
+              <AuthLink to="/register">Create Account</AuthLink>
             </p>
           </div>
         </div>

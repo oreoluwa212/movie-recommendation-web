@@ -1,10 +1,8 @@
-// stores/watchlistStore.js
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { toast } from 'react-toastify';
 import { watchlistsApi } from '../utils/api';
 
-// Request cache for preventing duplicate requests
 class RequestCache {
     constructor() {
         this.cache = new Map();
@@ -17,12 +15,9 @@ class RequestCache {
 
     set(key, promise) {
         this.cache.set(key, promise);
-
-        // Auto-cleanup after 30 seconds
         const timeout = setTimeout(() => {
             this.delete(key);
         }, 30000);
-
         this.timeouts.set(key, timeout);
     }
 
@@ -48,7 +43,6 @@ class RequestCache {
 
 const requestCache = new RequestCache();
 
-// Toast management to prevent duplicates
 class ToastManager {
     constructor() {
         this.activeToasts = new Set();
@@ -93,15 +87,10 @@ class ToastManager {
     info(message, options = {}) {
         return this.show('info', message, options);
     }
-
-    warning(message, options = {}) {
-        return this.show('warning', message, options);
-    }
 }
 
 const toastManager = new ToastManager();
 
-// Helper functions
 const isAuthenticated = () => {
     return !!(localStorage.getItem('authToken') || sessionStorage.getItem('authToken'));
 };
@@ -143,12 +132,10 @@ const getUserFriendlyError = (error, operation = 'perform this action') => {
     return `Failed to ${operation}. Please try again`;
 };
 
-// Helper to get consistent watchlist ID
 const getWatchlistId = (watchlist) => {
     return watchlist._id || watchlist.id;
 };
 
-// Helper to check if movie is in watchlist
 const isMovieInWatchlist = (watchlist, movieId) => {
     if (!watchlist || !watchlist.movies || !Array.isArray(watchlist.movies)) {
         return false;
@@ -165,7 +152,6 @@ const isMovieInWatchlist = (watchlist, movieId) => {
 export const useWatchlistStore = create(
     persist(
         (set, get) => ({
-            // State
             watchlists: [],
             currentWatchlist: null,
             publicWatchlists: [],
@@ -173,17 +159,13 @@ export const useWatchlistStore = create(
             isLoadingPublic: false,
             error: null,
             lastSync: null,
-
-            // Optimistic updates tracking
             optimisticUpdates: new Set(),
 
-            // Utility methods
             setLoading: (isLoading) => set({ isLoading }),
             setLoadingPublic: (isLoadingPublic) => set({ isLoadingPublic }),
             setError: (error) => set({ error }),
             clearError: () => set({ error: null }),
 
-            // Load user watchlists
             loadWatchlists: async (forceRefresh = false) => {
                 const cacheKey = 'loadWatchlists';
                 const currentState = get();
@@ -192,12 +174,10 @@ export const useWatchlistStore = create(
                     return { success: false, error: 'Not authenticated' };
                 }
 
-                // Return cached data if available and not forcing refresh
                 if (!forceRefresh && currentState.watchlists.length > 0) {
                     return { success: true, data: currentState.watchlists };
                 }
 
-                // Check for existing request
                 if (requestCache.has(cacheKey)) {
                     return await requestCache.get(cacheKey);
                 }
@@ -229,7 +209,6 @@ export const useWatchlistStore = create(
                 return await loadPromise;
             },
 
-            // Load specific watchlist
             loadWatchlist: async (watchlistId, forceRefresh = false) => {
                 const cacheKey = `loadWatchlist-${watchlistId}`;
                 const currentState = get();
@@ -238,13 +217,11 @@ export const useWatchlistStore = create(
                     return { success: false, error: 'Not authenticated' };
                 }
 
-                // Return cached data if available
                 if (!forceRefresh && currentState.currentWatchlist &&
                     getWatchlistId(currentState.currentWatchlist) === watchlistId) {
                     return { success: true, data: currentState.currentWatchlist };
                 }
 
-                // Check for existing request
                 if (requestCache.has(cacheKey)) {
                     return await requestCache.get(cacheKey);
                 }
@@ -275,17 +252,14 @@ export const useWatchlistStore = create(
                 return await loadPromise;
             },
 
-            // Load public watchlists
             loadPublicWatchlists: async (page = 1, limit = 10, forceRefresh = false) => {
                 const cacheKey = `loadPublicWatchlists-${page}-${limit}`;
                 const currentState = get();
 
-                // Return cached data if available
                 if (!forceRefresh && currentState.publicWatchlists.length > 0 && page === 1) {
                     return { success: true, data: currentState.publicWatchlists };
                 }
 
-                // Check for existing request
                 if (requestCache.has(cacheKey)) {
                     return await requestCache.get(cacheKey);
                 }
@@ -316,7 +290,6 @@ export const useWatchlistStore = create(
                 return await loadPromise;
             },
 
-            // Create watchlist
             createWatchlist: async (watchlistData) => {
                 if (!isAuthenticated()) {
                     toastManager.error('Please sign in to create a watchlist');
@@ -329,7 +302,6 @@ export const useWatchlistStore = create(
                     const response = await watchlistsApi.createWatchlist(watchlistData);
                     const newWatchlist = response.data || response;
 
-                    // Update state
                     set((state) => ({
                         watchlists: [...state.watchlists, newWatchlist],
                         isLoading: false
@@ -345,7 +317,6 @@ export const useWatchlistStore = create(
                 }
             },
 
-            // Update watchlist
             updateWatchlist: async (watchlistId, updateData) => {
                 if (!isAuthenticated()) {
                     toastManager.error('Please sign in to update watchlist');
@@ -358,7 +329,6 @@ export const useWatchlistStore = create(
                     const response = await watchlistsApi.updateWatchlist(watchlistId, updateData);
                     const updatedWatchlist = response.data || response;
 
-                    // Update state
                     set((state) => ({
                         watchlists: state.watchlists.map(w =>
                             getWatchlistId(w) === watchlistId ? updatedWatchlist : w
@@ -379,15 +349,12 @@ export const useWatchlistStore = create(
                 }
             },
 
-            // Delete watchlist
-            // Delete watchlist
             deleteWatchlist: async (watchlistId) => {
                 if (!isAuthenticated()) {
                     toastManager.error('Please sign in to delete watchlist');
                     return { success: false, error: 'Not authenticated' };
                 }
 
-                // Store the watchlist for potential rollback BEFORE optimistic update
                 const currentState = get();
                 const watchlistToDelete = currentState.watchlists.find(w => getWatchlistId(w) === watchlistId);
 
@@ -397,7 +364,6 @@ export const useWatchlistStore = create(
                 }
 
                 try {
-                    // Optimistic update - remove from state immediately
                     set((state) => ({
                         watchlists: state.watchlists.filter(w => getWatchlistId(w) !== watchlistId),
                         currentWatchlist: state.currentWatchlist &&
@@ -407,14 +373,12 @@ export const useWatchlistStore = create(
                         error: null
                     }));
 
-                    // Make the API call
                     await watchlistsApi.deleteWatchlist(watchlistId);
 
                     set({ isLoading: false });
                     toastManager.success('Watchlist deleted successfully');
                     return { success: true };
                 } catch (error) {
-                    // Revert optimistic update by restoring the deleted watchlist
                     set((state) => ({
                         watchlists: [...state.watchlists, watchlistToDelete].sort((a, b) =>
                             new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0)
@@ -429,7 +393,6 @@ export const useWatchlistStore = create(
                 }
             },
 
-            // Add movie to watchlist
             addMovieToWatchlist: async (watchlistId, movieData) => {
                 if (!isAuthenticated()) {
                     toastManager.error('Please sign in to add movies to watchlist');
@@ -439,7 +402,6 @@ export const useWatchlistStore = create(
                 const optimisticKey = `${watchlistId}-${movieData.movieId}`;
 
                 try {
-                    // Check if movie already exists
                     const currentState = get();
                     const watchlist = currentState.watchlists.find(w => getWatchlistId(w) === watchlistId);
 
@@ -448,7 +410,6 @@ export const useWatchlistStore = create(
                         return { success: false, error: 'Movie already exists' };
                     }
 
-                    // Optimistic update
                     set((state) => ({
                         watchlists: state.watchlists.map(w => {
                             if (getWatchlistId(w) === watchlistId) {
@@ -465,7 +426,6 @@ export const useWatchlistStore = create(
 
                     await watchlistsApi.addMovieToWatchlist(watchlistId, movieData);
 
-                    // Remove from optimistic updates
                     set((state) => {
                         const newOptimisticUpdates = new Set(state.optimisticUpdates);
                         newOptimisticUpdates.delete(optimisticKey);
@@ -475,7 +435,6 @@ export const useWatchlistStore = create(
                     toastManager.success(`Added "${movieData.title}" to watchlist`);
                     return { success: true };
                 } catch (error) {
-                    // Revert optimistic update
                     set((state) => ({
                         watchlists: state.watchlists.map(w => {
                             if (getWatchlistId(w) === watchlistId) {
@@ -500,14 +459,12 @@ export const useWatchlistStore = create(
                 }
             },
 
-            // Remove movie from watchlist
             removeMovieFromWatchlist: async (watchlistId, movieId) => {
                 if (!isAuthenticated()) {
                     toastManager.error('Please sign in to remove movies from watchlist');
                     return { success: false, error: 'Not authenticated' };
                 }
 
-                // Store movie data for potential revert BEFORE the try block
                 const currentState = get();
                 const watchlist = currentState.watchlists.find(w => getWatchlistId(w) === watchlistId);
                 const movieToRemove = watchlist?.movies?.find(m => Number(m.movieId) === Number(movieId));
@@ -518,7 +475,6 @@ export const useWatchlistStore = create(
                 }
 
                 try {
-                    // Optimistic update - remove movie from state immediately
                     set((state) => ({
                         watchlists: state.watchlists.map(w => {
                             if (getWatchlistId(w) === watchlistId) {
@@ -532,13 +488,11 @@ export const useWatchlistStore = create(
                         })
                     }));
 
-                    // Make the API call
                     await watchlistsApi.removeMovieFromWatchlist(watchlistId, movieId);
 
                     toastManager.success(`Removed "${movieToRemove.title}" from watchlist`);
                     return { success: true };
                 } catch (error) {
-                    // Revert optimistic update by restoring the removed movie
                     set((state) => ({
                         watchlists: state.watchlists.map(w => {
                             if (getWatchlistId(w) === watchlistId) {
@@ -558,7 +512,6 @@ export const useWatchlistStore = create(
                 }
             },
 
-            // Helper methods
             getWatchlistById: (watchlistId) => {
                 const watchlists = get().watchlists;
                 return watchlists.find(w => getWatchlistId(w) === watchlistId);
@@ -585,7 +538,6 @@ export const useWatchlistStore = create(
                 };
             },
 
-            // Sync with server
             syncWithServer: async (forceRefresh = false) => {
                 if (!isAuthenticated()) {
                     return { success: false, error: 'Not authenticated' };
@@ -600,7 +552,6 @@ export const useWatchlistStore = create(
                 }
             },
 
-            // Reset store
             reset: () => {
                 set({
                     watchlists: [],
@@ -615,7 +566,6 @@ export const useWatchlistStore = create(
                 requestCache.clear();
             },
 
-            // Clear all data
             clearAllData: () => {
                 get().reset();
                 toastManager.info('Watchlist data cleared');

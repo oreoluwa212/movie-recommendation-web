@@ -84,8 +84,8 @@ const Register = () => {
     <AuthContainer>
       <AuthCard>
         <AuthHeader 
-          title="Join StreamVibe" 
-          subtitle="Create your account" 
+          title="Create Account" 
+          subtitle="Join StreamVibe today" 
         />
 
         <div className="p-6 space-y-6">
@@ -181,7 +181,7 @@ const Register = () => {
             </SubmitButton>
           </form>
 
-          <div className="text-center">
+          <div className="text-center pt-4 border-t border-gray-700">
             <p className="text-gray-400">
               Already have an account?{" "}
               <AuthLink to="/login">Sign In</AuthLink>

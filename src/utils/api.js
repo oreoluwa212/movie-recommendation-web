@@ -1,14 +1,12 @@
-// utils/api.js
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 import axios from 'axios';
 
-// Enhanced Cache implementation with size limits
 class APICache {
     constructor(maxSize = 100) {
         this.cache = new Map();
         this.maxSize = maxSize;
-        this.CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+        this.CACHE_DURATION = 5 * 60 * 1000;
     }
 
     get(key) {
@@ -23,7 +21,6 @@ class APICache {
     }
 
     set(key, data) {
-        // Remove oldest entries if cache is full
         if (this.cache.size >= this.maxSize) {
             const oldestKey = this.cache.keys().next().value;
             this.cache.delete(oldestKey);
@@ -47,11 +44,6 @@ class APICache {
         return this.cache.keys();
     }
 
-    size() {
-        return this.cache.size;
-    }
-
-    // Clean expired entries
     cleanup() {
         const now = Date.now();
         for (const [key, value] of this.cache.entries()) {
@@ -92,70 +84,53 @@ class RequestQueue {
             .catch(reject)
             .finally(() => {
                 this.running.splice(this.running.indexOf(promise), 1);
-                if (this.delay > 0) {
-                    setTimeout(() => this.process(), this.delay);
-                } else {
-                    setTimeout(() => this.process(), 0);
-                }
+                setTimeout(() => this.process(), this.delay);
             });
 
         this.running.push(promise);
     }
 }
 
-// Initialize cache and request queues
 const apiCache = new APICache();
 const requestQueue = new RequestQueue(5, 100);
 const heavyQueue = new RequestQueue(2, 500);
 const ongoingRequests = new Map();
 
-// In-memory storage for Claude.ai compatibility (no localStorage)
 let memoryStorage = {};
 
-// Storage utility that works in all environments
 const storage = {
     getItem: (key) => {
         try {
-            // Try localStorage first if available
             if (typeof window !== 'undefined' && window.localStorage) {
                 return localStorage.getItem(key);
             }
-            // Fallback to memory storage
             return memoryStorage[key] || null;
         } catch {
-            // Fallback to memory storage if localStorage fails
             return memoryStorage[key] || null;
         }
     },
     setItem: (key, value) => {
         try {
-            // Try localStorage first if available
             if (typeof window !== 'undefined' && window.localStorage) {
                 localStorage.setItem(key, value);
             }
-            // Always store in memory as backup
             memoryStorage[key] = value;
         } catch {
-            // Fallback to memory storage if localStorage fails
             memoryStorage[key] = value;
         }
     },
     removeItem: (key) => {
         try {
-            // Try localStorage first if available
             if (typeof window !== 'undefined' && window.localStorage) {
                 localStorage.removeItem(key);
             }
-            // Always remove from memory
             delete memoryStorage[key];
         } catch {
-            // Fallback to memory storage if localStorage fails
             delete memoryStorage[key];
         }
     }
 };
 
-// Enhanced axios instance with increased timeout
 const api = axios.create({
     baseURL: API_BASE_URL,
     headers: {
@@ -164,10 +139,8 @@ const api = axios.create({
     timeout: 30000,
 });
 
-// Enhanced request interceptor
 api.interceptors.request.use(
     (config) => {
-        // Get token from storage (most up-to-date)
         const token = storage.getItem('authToken');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
@@ -179,7 +152,6 @@ api.interceptors.request.use(
     }
 );
 
-// Enhanced response interceptor
 api.interceptors.response.use(
     (response) => {
         return response;
@@ -187,7 +159,6 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        // Handle 429 errors with exponential backoff
         if (error.response?.status === 429 && !originalRequest._retry) {
             originalRequest._retry = true;
             originalRequest._retryCount = originalRequest._retryCount || 0;
@@ -201,7 +172,6 @@ api.interceptors.response.use(
             }
         }
 
-        // Handle 401 errors (unauthorized)
         if (error.response?.status === 401) {
             storage.removeItem('authToken');
             if (typeof window !== 'undefined') {
@@ -213,7 +183,6 @@ api.interceptors.response.use(
     }
 );
 
-// Error handling utility
 function handleApiError(error, context = '') {
     console.error(`API Error in ${context}:`, error);
 
@@ -244,9 +213,7 @@ function handleApiError(error, context = '') {
     }
 }
 
-// Enhanced request function with caching and selective queuing
 const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
-    // Check cache first
     if (cacheKey) {
         const cachedData = apiCache.get(cacheKey);
         if (cachedData) {
@@ -254,12 +221,10 @@ const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
         }
     }
 
-    // Check for ongoing requests
     if (cacheKey && ongoingRequests.has(cacheKey)) {
         return ongoingRequests.get(cacheKey);
     }
 
-    // Create the request promise with selective queuing
     let requestPromise;
     switch (queueType) {
         case 'heavy':
@@ -274,7 +239,6 @@ const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
             break;
     }
 
-    // Store ongoing request
     if (cacheKey) {
         ongoingRequests.set(cacheKey, requestPromise);
     }
@@ -282,7 +246,6 @@ const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
     try {
         const result = await requestPromise;
 
-        // Cache the result
         if (cacheKey) {
             apiCache.set(cacheKey, result);
         }
@@ -291,7 +254,6 @@ const makeRequest = async (requestFn, cacheKey = null, queueType = 'none') => {
     } catch (error) {
         handleApiError(error, cacheKey);
     } finally {
-        // Clean up ongoing request
         if (cacheKey) {
             ongoingRequests.delete(cacheKey);
         }
@@ -302,7 +264,6 @@ export const userApi = {
     updateProfile: async (profileData) => {
         try {
             const response = await api.put('/users/profile', profileData);
-            // Clear relevant caches
             apiCache.delete('user-profile');
             apiCache.delete('current-user');
             return response.data;
@@ -318,7 +279,6 @@ export const userApi = {
                     'Content-Type': 'multipart/form-data',
                 },
             });
-            // Clear relevant caches
             apiCache.delete('user-profile');
             apiCache.delete('current-user');
             return response.data;
@@ -330,7 +290,6 @@ export const userApi = {
     deleteAvatar: async () => {
         try {
             const response = await api.delete('/users/avatar');
-            // Clear relevant caches
             apiCache.delete('user-profile');
             apiCache.delete('current-user');
             return response.data;
@@ -344,7 +303,6 @@ export const userApi = {
             const response = await api.put('/users/profile', {
                 preferences: { theme }
             });
-            // Clear relevant caches
             apiCache.delete('user-profile');
             apiCache.delete('current-user');
             return response.data;
@@ -369,7 +327,7 @@ export const userApi = {
         try {
             const response = await api.post('/users/favorites', movieData);
             apiCache.delete('user-favorites');
-            apiCache.delete('user-profile'); // Update stats
+            apiCache.delete('user-profile');
             return response.data;
         } catch (error) {
             handleApiError(error, 'addFavorite');
@@ -392,7 +350,7 @@ export const userApi = {
         try {
             const response = await api.delete(`/users/favorites/${movieId}`);
             apiCache.delete('user-favorites');
-            apiCache.delete('user-profile'); // Update stats
+            apiCache.delete('user-profile');
             return response.data;
         } catch (error) {
             handleApiError(error, 'removeFavorite');
@@ -403,7 +361,7 @@ export const userApi = {
         try {
             const response = await api.post('/users/watched', movieData);
             apiCache.delete('user-watched');
-            apiCache.delete('user-profile'); // Update stats
+            apiCache.delete('user-profile');
             return response.data;
         } catch (error) {
             handleApiError(error, 'addToWatched');
@@ -426,17 +384,16 @@ export const userApi = {
         try {
             const response = await api.delete(`/users/watched/${movieId}`);
             apiCache.delete('user-watched');
-            apiCache.delete('user-profile'); // Update stats
+            apiCache.delete('user-profile');
             return response.data;
         } catch (error) {
             handleApiError(error, 'removeFromWatched');
         }
     },
 
-    // Additional utility functions
     validateImageFile: (file) => {
         const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        const maxSize = 5 * 1024 * 1024;
 
         if (!allowedTypes.includes(file.type)) {
             throw new Error('Invalid file type. Please upload a JPEG, PNG, GIF, or WebP image.');
@@ -456,16 +413,13 @@ export const userApi = {
             const img = new Image();
 
             img.onload = () => {
-                // Calculate new dimensions
                 const ratio = Math.min(maxWidth / img.width, maxWidth / img.height);
                 const newWidth = img.width * ratio;
                 const newHeight = img.height * ratio;
 
-                // Set canvas size
                 canvas.width = newWidth;
                 canvas.height = newHeight;
 
-                // Draw and compress
                 ctx.drawImage(img, 0, 0, newWidth, newHeight);
 
                 canvas.toBlob(resolve, file.type, quality);
@@ -476,7 +430,6 @@ export const userApi = {
     }
 };
 
-// Enhanced Auth API functions
 export const authApi = {
     register: async (userData) => {
         try {
@@ -539,7 +492,6 @@ export const authApi = {
     updateProfile: async (userData) => {
         try {
             const response = await api.put('/auth/profile', userData);
-            // Clear relevant caches
             apiCache.delete('current-user');
             apiCache.delete('user-profile');
             return response.data;
@@ -581,7 +533,6 @@ export const authApi = {
     }
 };
 
-// Theme management utilities
 export const themeUtils = {
     applyTheme: (theme) => {
         const root = document.documentElement;
@@ -594,7 +545,6 @@ export const themeUtils = {
             root.classList.add('dark');
         }
 
-        // Store theme preference
         localStorage.setItem('theme', theme);
     },
 
@@ -610,7 +560,6 @@ export const themeUtils = {
     }
 };
 
-// Enhanced Movie API functions with selective queuing
 export const movieApi = {
     getPopularMovies: async (page = 1) => {
         const cacheKey = `popular-movies-${page}`;
@@ -647,7 +596,6 @@ export const movieApi = {
             'light'
         );
     },
-
 
     getUpcomingMovies: async (page = 1) => {
         const cacheKey = `upcoming-movies-${page}`;
@@ -799,7 +747,6 @@ export const movieApi = {
     }
 };
 
-// Watchlists API functions with selective queuing
 export const watchlistsApi = {
     createWatchlist: async (watchlistData) => {
         try {
@@ -883,7 +830,6 @@ export const watchlistsApi = {
     }
 };
 
-// Validation function for review data
 function validateReviewData(reviewData) {
     if (!reviewData) {
         throw new Error('Review data is required');
@@ -909,7 +855,6 @@ function validateReviewData(reviewData) {
     return true;
 }
 
-// Cache clearing function for reviews
 function clearReviewCaches(movieId) {
     apiCache.delete('user-reviews');
 
@@ -1112,7 +1057,6 @@ export const reviewsApi = {
     }
 };
 
-// Utility functions for cache and queue management
 export const cacheUtils = {
     clearCache: () => {
         apiCache.clear();
@@ -1127,7 +1071,6 @@ export const cacheUtils = {
         });
     },
 
-    // New utility to check queue status
     getQueueStatus: () => {
         return {
             lightQueue: {

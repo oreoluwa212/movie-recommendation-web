@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { User, Loader2 } from "lucide-react";
+import { User, Loader2, X } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 
 // Import reusable components
@@ -21,7 +21,7 @@ import { DemoCredentials } from "../components/auth/DemoCredentials";
 import { useAuthForm } from "../hooks/useAuthForm";
 import { validateForm } from "../utils/validation";
 
-export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
+export const AuthModal = ({ isOpen, onClose, initialMode = "login", onSuccess }) => {
   const navigate = useNavigate();
   const [authMode, setAuthMode] = useState(initialMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,8 +51,11 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
   useEffect(() => {
     if (isAuthenticated) {
       onClose();
+      if (onSuccess) {
+        onSuccess();
+      }
     }
-  }, [isAuthenticated, onClose]);
+  }, [isAuthenticated, onClose, onSuccess]);
 
   useEffect(() => {
     if (isOpen) {
@@ -66,6 +69,23 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
     setErrors({});
   }, [authMode, setErrors]);
 
+  // Handle ESC key and prevent background scroll - but don't interfere with navbar
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === "Escape" && isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("keydown", handleEsc);
+      // Don't manage body overflow here - let parent component handle it
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, [isOpen, onClose]);
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter") {
@@ -103,8 +123,15 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
       if (authMode === "login") {
         const result = await login(formData.email, formData.password);
         if (result.success) {
+          toast.success("Welcome back!", {
+            position: "top-right",
+            autoClose: 2000,
+          });
           setTimeout(() => {
             onClose();
+            if (onSuccess) {
+              onSuccess();
+            }
           }, 1000);
         }
       } else if (authMode === "register") {
@@ -121,10 +148,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
               {
                 position: "top-right",
                 autoClose: 3000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
               }
             );
             setTimeout(() => {
@@ -139,8 +162,15 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
               });
             }, 1500);
           } else {
+            toast.success("Account created successfully!", {
+              position: "top-right",
+              autoClose: 2000,
+            });
             setTimeout(() => {
               onClose();
+              if (onSuccess) {
+                onSuccess();
+              }
             }, 1000);
           }
         }
@@ -150,13 +180,12 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
           toast.success("Email verified successfully!", {
             position: "top-right",
             autoClose: 3000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
           });
           setTimeout(() => {
             onClose();
+            if (onSuccess) {
+              onSuccess();
+            }
           }, 1000);
         } else {
           setErrors({
@@ -165,10 +194,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
           toast.error("Invalid verification code.", {
             position: "top-right",
             autoClose: 5000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
           });
         }
       }
@@ -177,10 +202,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
       toast.error("An error occurred. Please try again.", {
         position: "top-right",
         autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
       });
     } finally {
       setIsSubmitting(false);
@@ -192,10 +213,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
     toast.success("Verification code sent to your email!", {
       position: "top-right",
       autoClose: 3000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
     });
     setTimeout(() => setVerificationSent(false), 3000);
   };
@@ -204,53 +221,50 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
     toast.info(`${provider} login integration coming soon!`, {
       position: "top-right",
       autoClose: 3000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
     });
   };
 
   const getHeaderContent = () => {
     const content = {
-      login: { title: "Welcome Back", subtitle: "Sign in to your account" },
-      register: { title: "Join StreamVibe", subtitle: "Create your account" },
-      verify: { title: "Verify Email", subtitle: "Enter verification code" }
+      login: { title: "Sign In", subtitle: "Welcome back to StreamVibe" },
+      register: { title: "Create Account", subtitle: "Join StreamVibe today" },
+      verify: { title: "Verify Email", subtitle: "Check your email for the code" }
     };
     return content[authMode];
   };
 
-  useEffect(() => {
-    const handleEsc = (e) => {
-      if (e.key === "Escape" && isOpen) {
-        onClose();
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("keydown", handleEsc);
-      document.body.style.overflow = "hidden";
+  // Handle backdrop click
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
     }
-
-    return () => {
-      document.removeEventListener("keydown", handleEsc);
-      document.body.style.overflow = "unset";
-    };
-  }, [isOpen, onClose]);
+  };
 
   if (!isOpen) return null;
 
   const headerContent = getHeaderContent();
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-      <div className="w-full max-w-md">
+    <div 
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm"
+      onClick={handleBackdropClick}
+      style={{ zIndex: 9999 }} // Ensure it's above everything but not conflicting with navbar
+    >
+      <div className="w-full max-w-md relative">
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute -top-4 -right-4 z-10 bg-gray-800 hover:bg-gray-700 text-white rounded-full p-2 transition-colors shadow-lg"
+          type="button"
+          aria-label="Close modal"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
         <AuthCard>
           <AuthHeader
             title={headerContent.title}
             subtitle={headerContent.subtitle}
-            onClose={onClose}
-            showCloseButton={true}
           />
 
           <div className="p-6 space-y-6">
@@ -264,14 +278,6 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
                 />
                 <FormDivider />
               </div>
-            )}
-
-            {/* Demo Credentials for Login */}
-            {authMode === "login" && (
-              <DemoCredentials 
-                email="demo@streamvibe.com" 
-                password="password123" 
-              />
             )}
 
             <div className="space-y-4">
@@ -368,7 +374,7 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
 
               {/* Forgot Password Link */}
               {authMode === "login" && (
-                <div className="text-center">
+                <div className="text-right">
                   <button
                     type="button"
                     onClick={() =>
@@ -399,7 +405,7 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
 
             {/* Toggle between login and register */}
             {authMode !== "verify" && (
-              <div className="text-center">
+              <div className="text-center pt-4 border-t border-gray-700">
                 <p className="text-gray-400">
                   {authMode === "login"
                     ? "Don't have an account?"
@@ -409,8 +415,9 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
                       setAuthMode(authMode === "login" ? "register" : "login")
                     }
                     className="text-red-400 hover:text-red-300 underline transition-colors font-medium"
+                    type="button"
                   >
-                    {authMode === "login" ? "Sign Up" : "Sign In"}
+                    {authMode === "login" ? "Create Account" : "Sign In"}
                   </button>
                 </p>
               </div>
@@ -418,16 +425,14 @@ export const AuthModal = ({ isOpen, onClose, initialMode = "login" }) => {
 
             {/* Back to login from verification */}
             {authMode === "verify" && (
-              <div className="text-center">
-                <AuthLink
-                  to="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setAuthMode("login");
-                  }}
+              <div className="text-center pt-4 border-t border-gray-700">
+                <button
+                  onClick={() => setAuthMode("login")}
+                  className="text-red-400 hover:text-red-300 underline transition-colors font-medium"
+                  type="button"
                 >
                   Back to Sign In
-                </AuthLink>
+                </button>
               </div>
             )}
           </div>

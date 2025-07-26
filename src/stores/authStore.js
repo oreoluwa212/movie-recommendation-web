@@ -1,4 +1,3 @@
-// stores/authStore.js
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { toast } from 'react-toastify';
@@ -7,14 +6,12 @@ import { authApi } from '../utils/api';
 export const useAuthStore = create(
     persist(
         (set, get) => ({
-            // State
             user: null,
             token: null,
             isAuthenticated: false,
             isLoading: false,
             error: null,
 
-            // Actions
             setError: (error) => {
                 set({ error });
             },
@@ -27,11 +24,8 @@ export const useAuthStore = create(
                 set({ isLoading: true, error: null });
 
                 try {
-                    console.log('Auth Store: Starting login process');
                     const response = await authApi.login({ email, password });
-                    console.log('Auth Store: Login response received', response);
 
-                    // Handle different response structures
                     const userData = response.user || response.data?.user || response;
                     const token = response.token || response.data?.token || response.accessToken;
 
@@ -39,10 +33,8 @@ export const useAuthStore = create(
                         throw new Error('Invalid response: missing user data');
                     }
 
-                    // Check if email is verified before authenticating
                     const isEmailVerified = userData.isEmailVerified || userData.emailVerified || false;
 
-                    // Store token in localStorage for axios interceptor (only if verified)
                     if (token && isEmailVerified) {
                         localStorage.setItem('authToken', token);
                     }
@@ -50,7 +42,7 @@ export const useAuthStore = create(
                     set({
                         user: userData,
                         token: isEmailVerified ? token : null,
-                        isAuthenticated: isEmailVerified, // Only authenticate if email is verified
+                        isAuthenticated: isEmailVerified,
                         isLoading: false,
                         error: null
                     });
@@ -67,9 +59,8 @@ export const useAuthStore = create(
                         token: isEmailVerified ? token : null,
                         emailVerificationRequired: !isEmailVerified
                     };
-                } catch (error) {
-                    console.error('Auth Store: Login error:', error);
-                    const errorMessage = error.response?.data?.message || error.message || 'Login failed';
+                } catch (err) {
+                    const errorMessage = err.response?.data?.message || err.message || 'Login failed';
                     set({
                         isLoading: false,
                         error: errorMessage,
@@ -83,33 +74,24 @@ export const useAuthStore = create(
             },
 
             register: async (username, email, password) => {
-                console.log('Auth Store: Starting registration process', { username, email });
                 set({ isLoading: true, error: null });
 
                 try {
-                    // Call the API
                     const response = await authApi.register({ username, email, password });
-                    console.log('Auth Store: Registration response received', response);
 
-                    // Handle different response structures
                     const userData = response.user || response.data?.user || response;
                     const token = response.token || response.data?.token || response.accessToken;
                     const emailVerificationRequired = response.emailVerificationRequired ||
                         response.data?.emailVerificationRequired ||
                         false;
 
-                    console.log('Auth Store: Parsed user data:', userData);
-                    console.log('Auth Store: Email verification required:', emailVerificationRequired);
-
                     if (!userData) {
                         throw new Error('Invalid response: missing user data');
                     }
 
-                    // Check if email verification is required
                     const isEmailVerified = userData.isEmailVerified || userData.emailVerified || false;
                     const needsVerification = emailVerificationRequired || !isEmailVerified;
 
-                    // Only store token and authenticate if email is verified
                     if (token && !needsVerification) {
                         localStorage.setItem('authToken', token);
                     }
@@ -117,7 +99,7 @@ export const useAuthStore = create(
                     set({
                         user: userData,
                         token: needsVerification ? null : token,
-                        isAuthenticated: !needsVerification, // Only authenticate if no verification needed
+                        isAuthenticated: !needsVerification,
                         isLoading: false,
                         error: null
                     });
@@ -134,21 +116,16 @@ export const useAuthStore = create(
                         token: needsVerification ? null : token,
                         emailVerificationRequired: needsVerification
                     };
-                } catch (error) {
-                    console.error('Auth Store: Registration error:', error);
-
-                    // Extract error message
+                } catch (err) {
                     let errorMessage = 'Registration failed';
 
-                    if (error.response?.data?.message) {
-                        errorMessage = error.response.data.message;
-                    } else if (error.response?.data?.error) {
-                        errorMessage = error.response.data.error;
-                    } else if (error.message) {
-                        errorMessage = error.message;
+                    if (err.response?.data?.message) {
+                        errorMessage = err.response.data.message;
+                    } else if (err.response?.data?.error) {
+                        errorMessage = err.response.data.error;
+                    } else if (err.message) {
+                        errorMessage = err.message;
                     }
-
-                    console.error('Auth Store: Error message:', errorMessage);
 
                     set({
                         isLoading: false,
@@ -167,12 +144,10 @@ export const useAuthStore = create(
                 set({ isLoading: true, error: null });
 
                 try {
-                    // Send with correct parameter name expected by backend
                     const response = await authApi.verifyEmail({
                         email,
-                        code: verificationCode // Changed from verificationCode to code
+                        code: verificationCode
                     });
-                    console.log('Auth Store: Email verification response:', response);
 
                     const userData = response.user || response.data?.user || response;
                     const token = response.token || response.data?.token || response.accessToken;
@@ -181,7 +156,6 @@ export const useAuthStore = create(
                         throw new Error('Invalid response: missing user data');
                     }
 
-                    // Update user data to mark email as verified, but don't authenticate yet
                     const verifiedUser = {
                         ...get().user,
                         ...userData,
@@ -191,8 +165,8 @@ export const useAuthStore = create(
 
                     set({
                         user: verifiedUser,
-                        token: null, // Don't store token yet - user needs to login
-                        isAuthenticated: false, // Don't authenticate yet - redirect to login
+                        token: null,
+                        isAuthenticated: false,
                         isLoading: false
                     });
 
@@ -201,11 +175,10 @@ export const useAuthStore = create(
                         success: true,
                         user: verifiedUser,
                         token,
-                        redirectToLogin: true // Flag to indicate should redirect to login
+                        redirectToLogin: true
                     };
-                } catch (error) {
-                    console.error('Auth Store: Email verification error:', error);
-                    const errorMessage = error.response?.data?.message || error.message || 'Email verification failed';
+                } catch (err) {
+                    const errorMessage = err.response?.data?.message || err.message || 'Email verification failed';
                     set({
                         error: errorMessage,
                         isLoading: false
@@ -223,9 +196,8 @@ export const useAuthStore = create(
                     set({ isLoading: false });
                     toast.success('Verification code sent! Please check your email.');
                     return { success: true, message: 'Verification code sent successfully' };
-                } catch (error) {
-                    console.error('Auth Store: Resend verification error:', error);
-                    const errorMessage = error.response?.data?.message || error.message || 'Failed to resend verification code';
+                } catch (err) {
+                    const errorMessage = err.response?.data?.message || err.message || 'Failed to resend verification code';
                     set({
                         error: errorMessage,
                         isLoading: false
@@ -238,7 +210,6 @@ export const useAuthStore = create(
             logout: () => {
                 const currentUser = get().user;
 
-                // Clear token from localStorage
                 localStorage.removeItem('authToken');
 
                 set({
@@ -249,7 +220,6 @@ export const useAuthStore = create(
                     error: null
                 });
 
-                // Clear user data from other stores
                 if (typeof window !== 'undefined') {
                     localStorage.removeItem('user-storage');
                     localStorage.removeItem('movie-storage');
@@ -273,11 +243,10 @@ export const useAuthStore = create(
 
                     set({ user: userData, isLoading: false });
                     return userData;
-                } catch (error) {
-                    console.error('Get current user failed:', error);
+                } catch (err) {
                     set({
                         isLoading: false,
-                        error: error.message,
+                        error: err.message,
                         isAuthenticated: false,
                         user: null,
                         token: null
@@ -307,8 +276,8 @@ export const useAuthStore = create(
 
                     toast.success('Profile updated successfully!');
                     return { success: true, user: updatedUser };
-                } catch (error) {
-                    const errorMessage = error.response?.data?.message || error.message || 'Profile update failed';
+                } catch (err) {
+                    const errorMessage = err.response?.data?.message || err.message || 'Profile update failed';
                     set({
                         isLoading: false,
                         error: errorMessage
@@ -327,11 +296,9 @@ export const useAuthStore = create(
                         if (user && (user.isEmailVerified || user.emailVerified)) {
                             set({ isAuthenticated: true });
                         } else {
-                            // User exists but email not verified
                             set({ isAuthenticated: false });
                         }
-                    } catch (error) {
-                        console.error('Auth initialization failed:', error);
+                    } catch {
                         get().logout();
                     }
                 }
@@ -348,8 +315,7 @@ export const useAuthStore = create(
                         return payload.exp < currentTime;
                     }
                     return false;
-                } catch (error) {
-                    console.error('Token parsing failed:', error);
+                } catch {
                     return true;
                 }
             },
@@ -367,8 +333,7 @@ export const useAuthStore = create(
                         return true;
                     }
                     return false;
-                } catch (error) {
-                    console.error('Token refresh failed:', error);
+                } catch {
                     get().logout();
                     return false;
                 }
@@ -382,7 +347,6 @@ export const useAuthStore = create(
                     set({ token: storedToken });
                 }
 
-                // Check if user exists and email is verified
                 if (user && !(user.isEmailVerified || user.emailVerified)) {
                     return false;
                 }
@@ -406,7 +370,6 @@ export const useAuthStore = create(
                 if (state?.token) {
                     localStorage.setItem('authToken', state.token);
 
-                    // Only initialize if email is verified
                     if (state.user && (state.user.isEmailVerified || state.user.emailVerified)) {
                         if (!state.isTokenExpired?.()) {
                             setTimeout(() => {
@@ -416,7 +379,6 @@ export const useAuthStore = create(
                             state.logout?.();
                         }
                     } else {
-                        // User exists but email not verified
                         state.logout?.();
                     }
                 }

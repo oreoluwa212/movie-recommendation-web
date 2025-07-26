@@ -1,9 +1,7 @@
-// stores/useFilterStore.js
 import { create } from 'zustand';
 import { movieApi } from '../utils/api';
 
 export const useFilterStore = create((set, get) => ({
-  // State
   activeFilters: {
     genres: [],
     minRating: '',
@@ -22,7 +20,6 @@ export const useFilterStore = create((set, get) => ({
   },
   showFilters: false,
 
-  // Computed properties
   hasActiveFilters: () => {
     const { activeFilters } = get();
     return (
@@ -45,9 +42,7 @@ export const useFilterStore = create((set, get) => ({
     return count;
   },
 
-  // Actions
   setActiveFilters: (filters) => {
-    console.log('Setting active filters:', filters);
     set({ activeFilters: { ...filters } });
   },
 
@@ -60,7 +55,6 @@ export const useFilterStore = create((set, get) => ({
   },
 
   resetFilters: () => {
-    console.log('Resetting filters');
     set({
       activeFilters: {
         genres: [],
@@ -81,8 +75,6 @@ export const useFilterStore = create((set, get) => ({
   },
 
   applyFilters: async (filters, page = 1) => {
-    console.log('Applying filters:', filters, 'Page:', page);
-
     set({
       isFilterLoading: true,
       filterError: null,
@@ -90,7 +82,6 @@ export const useFilterStore = create((set, get) => ({
     });
 
     try {
-      // Build query parameters
       const queryParams = new URLSearchParams();
 
       if (page) queryParams.append('page', page.toString());
@@ -103,10 +94,7 @@ export const useFilterStore = create((set, get) => ({
       if (filters.sortBy) queryParams.append('sortBy', filters.sortBy);
       if (filters.sortOrder) queryParams.append('sortOrder', filters.sortOrder);
 
-      console.log('Filter query params:', queryParams.toString());
-
       const response = await movieApi.filterMovies(queryParams.toString());
-      console.log('Filter response:', response);
 
       let movies = [];
       let pagination = {
@@ -115,7 +103,6 @@ export const useFilterStore = create((set, get) => ({
         totalResults: 0,
       };
 
-      // Handle different response structures
       if (response.data) {
         movies = response.data.results || response.data.movies || [];
         pagination = {
@@ -134,8 +121,6 @@ export const useFilterStore = create((set, get) => ({
         movies = response;
       }
 
-      console.log('Processed filter results:', { movies: movies.length, pagination });
-
       set({
         filteredMovies: movies,
         filterPagination: pagination,
@@ -143,9 +128,8 @@ export const useFilterStore = create((set, get) => ({
       });
 
       return { movies, pagination };
-    } catch (error) {
-      console.error('Filter error:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to filter movies';
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to filter movies';
 
       set({
         filterError: errorMessage,
@@ -153,13 +137,12 @@ export const useFilterStore = create((set, get) => ({
         isFilterLoading: false,
       });
 
-      throw error;
+      throw err;
     }
   },
 
   changePage: async (page) => {
     const { activeFilters } = get();
-    console.log('Changing page to:', page);
 
     if (get().hasActiveFilters()) {
       await get().applyFilters(activeFilters, page);

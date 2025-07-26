@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  AlertCircle,
   CheckCircle,
   Film,
   Loader2,
@@ -17,7 +16,6 @@ const VerifyEmail = () => {
   const [verificationCode, setVerificationCode] = useState("");
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [success, setSuccess] = useState("");
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -64,7 +62,6 @@ const VerifyEmail = () => {
     const value = e.target.value.replace(/\D/g, "").slice(0, 6);
     setVerificationCode(value);
 
-    // Clear errors when user types
     if (errors.verificationCode) {
       setErrors({});
     }
@@ -80,17 +77,13 @@ const VerifyEmail = () => {
     }
 
     setIsSubmitting(true);
-    setSuccess("");
     setErrors({});
 
     try {
-      // Call the actual API endpoint via auth store
       const result = await verifyEmail(email, verificationCode);
 
       if (result.success) {
         setIsVerified(true);
-
-        // Redirect to login page after successful verification
         setTimeout(() => {
           navigate("/login", {
             state: {
@@ -129,12 +122,11 @@ const VerifyEmail = () => {
     setErrors({});
 
     try {
-      // Call the actual API endpoint via auth store
       const result = await resendVerificationCode(email);
 
       if (result.success) {
         setResendSuccess(true);
-        setTimeLeft(60); // 60 second cooldown
+        setTimeLeft(60);
         setTimeout(() => setResendSuccess(false), 3000);
       } else {
         setErrors({
@@ -172,7 +164,7 @@ const VerifyEmail = () => {
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4 py-8">
       <div className="max-w-md w-full">
         <div className="bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 overflow-hidden">
-          {/* Header */}
+          {/* Consistent Header */}
           <div className="bg-gradient-to-r from-red-600 to-red-700 p-6">
             <div className="flex items-center justify-center">
               <div className="flex items-center gap-3">
@@ -184,12 +176,12 @@ const VerifyEmail = () => {
                 </div>
                 <div className="text-center">
                   <h1 className="text-2xl font-bold text-white">
-                    {isVerified ? "Email Verified!" : "Verify Your Email"}
+                    {isVerified ? "Email Verified!" : "Verify Email"}
                   </h1>
                   <p className="text-red-100 text-sm">
                     {isVerified
-                      ? "You can now login to your account"
-                      : "We've sent you a verification code"}
+                      ? "Welcome to StreamVibe"
+                      : "Check your email for the code"}
                   </p>
                 </div>
               </div>
@@ -226,16 +218,8 @@ const VerifyEmail = () => {
                   Your email has been verified successfully!
                 </p>
                 <p className="text-gray-300 text-sm">
-                  You can now login to your StreamVibe account.
+                  You can now sign in to your StreamVibe account.
                 </p>
-              </div>
-            )}
-
-            {/* Success Message */}
-            {success && (
-              <div className="p-3 bg-green-500 bg-opacity-10 border border-green-500 border-opacity-30 rounded-lg flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0" />
-                <span className="text-green-400 text-sm">{success}</span>
               </div>
             )}
 
@@ -246,6 +230,13 @@ const VerifyEmail = () => {
                 <span className="text-blue-400 text-sm">
                   New verification code sent!
                 </span>
+              </div>
+            )}
+
+            {/* Error Display */}
+            {errors.verificationCode && (
+              <div className="p-3 bg-red-500 bg-opacity-10 border border-red-500 border-opacity-30 rounded-lg">
+                <span className="text-red-400 text-sm">{errors.verificationCode}</span>
               </div>
             )}
 
@@ -263,11 +254,10 @@ const VerifyEmail = () => {
                     onChange={handleInputChange}
                     onKeyPress={handleKeyPress}
                     maxLength="6"
-                    className={`w-full px-4 py-4 bg-gray-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-white text-center text-2xl tracking-wider font-mono transition-colors ${
-                      errors.verificationCode
+                    className={`w-full px-4 py-4 bg-gray-700 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-white text-center text-2xl tracking-wider font-mono transition-colors ${errors.verificationCode
                         ? "border-red-500"
                         : "border-gray-600 focus:border-red-500"
-                    }`}
+                      }`}
                     placeholder="000000"
                     autoComplete="one-time-code"
                   />
@@ -300,7 +290,7 @@ const VerifyEmail = () => {
                 >
                   <div className="flex items-center justify-center gap-2">
                     <LogIn className="h-5 w-5" />
-                    <span>Continue to Login</span>
+                    <span>Continue to Sign In</span>
                   </div>
                 </button>
               </div>
@@ -326,14 +316,14 @@ const VerifyEmail = () => {
                   {timeLeft > 0
                     ? `Resend in ${timeLeft}s`
                     : resendLoading
-                    ? "Sending..."
-                    : "Resend Code"}
+                      ? "Sending..."
+                      : "Resend Code"}
                 </button>
               </div>
             )}
 
             {/* Back to Login */}
-            <div className="text-center">
+            <div className="text-center pt-4 border-t border-gray-700">
               <Link
                 to="/login"
                 className="inline-flex items-center gap-2 text-red-400 hover:text-red-300 transition-colors text-sm font-medium"

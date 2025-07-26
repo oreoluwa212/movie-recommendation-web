@@ -1,206 +1,295 @@
-// hooks/useProfile.js
-import { useUserStore } from "../stores/userStore";
-import { toast } from "react-toastify";
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useUserStore } from '../stores/userStore';
+import { useAuthStore } from '../stores/authStore';
+import { toast } from 'react-toastify';
 
 export const useProfile = () => {
-  const profile = useUserStore((state) => state.profile);
-  const minimalProfile = useUserStore((state) => state.minimalProfile);
-  const updateProfile = useUserStore((state) => state.updateProfile);
-  const uploadAvatar = useUserStore((state) => state.uploadAvatar);
-  const deleteAvatar = useUserStore((state) => state.deleteAvatar);
-  const loadProfile = useUserStore((state) => state.loadProfile);
-  const loadMinimalProfile = useUserStore((state) => state.loadMinimalProfile);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const initializationRef = useRef(false);
+  const loadingRef = useRef(false);
 
-  // Loading states
-  const isProfileUpdateLoading = useUserStore(
-    (state) => state.isProfileUpdateLoading
-  );
-  const isAvatarLoading = useUserStore((state) => state.isAvatarLoading);
-  const isLoading = useUserStore((state) => state.isLoading);
+  const { isAuthenticated } = useAuthStore();
 
-  // Error states
-  const profileUpdateError = useUserStore((state) => state.profileUpdateError);
-  const avatarError = useUserStore((state) => state.avatarError);
-  const error = useUserStore((state) => state.error);
+  const {
+    profile,
+    minimalProfile,
+    favorites,
+    watchedMovies,
+    reviews,
+    watchlists,
+    loadProfile,
+    initialize,
+    updateProfile: updateProfileStore,
+    uploadAvatar: uploadAvatarStore,
+    deleteAvatar: deleteAvatarStore,
+    syncWithServer,
+    getStats,
+    isMinimalProfileLoaded,
+    isMinimalProfileLoading,
+    lastSync
+  } = useUserStore();
 
-  // Profile update with toast notifications
-  const handleUpdateProfile = async (profileData) => {
+  // Combined user data - prefer full profile over minimal
+  const currentUser = profile || minimalProfile;
+
+  // Stats calculation
+  const userStats = getStats();
+
+  // Initialize profile data on mount and when authentication changes
+  const ensureInitialized = useCallback(async () => {
+    if (!isAuthenticated) {
+      setIsInitialized(false);
+      setError(null);
+      return;
+    }
+
+    if (initializationRef.current || isInitialized) {
+      return;
+    }
+
+    initializationRef.current = true;
+    setIsLoading(true);
+    setError(null);
+
     try {
-      const result = await updateProfile(profileData);
-      if (result.success) {
-        toast.success("Profile updated successfully!");
-        return result;
-      } else {
-        toast.error(result.error || "Failed to update profile");
-        return result;
+      // First ensure minimal profile is loaded
+      if (!isMinimalProfileLoaded) {
+        await initialize();
       }
-    } catch (error) {
-      const errorMessage = error.message || "Failed to update profile";
+
+      // Then load full profile data
+      const result = await loadProfile(false);
+
+      if (result.success) {
+        setIsInitialized(true);
+        setError(null);
+      } else {
+        throw new Error(result.error || 'Failed to load profile');
+      }
+    } catch (err) {
+      console.error('Profile initialization error:', err);
+      setError(err.message || 'Failed to initialize profile');
+      setIsInitialized(false);
+    } finally {
+      setIsLoading(false);
+      initializationRef.current = false;
+    }
+  }, [isAuthenticated, initialize, loadProfile, isMinimalProfileLoaded, isInitialized]);
+
+  // Ensure full profile is loaded (including favorites, watched movies, etc.)
+  const ensureFullProfileLoaded = useCallback(async (forceRefresh = false) => {
+    if (!isAuthenticated) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    if (loadingRef.current) {
+      return { success: false, error: 'Already loading' };
+    }
+
+    // Check if we already have full profile data and it's recent
+    const hasRecentData = profile && favorites && lastSync &&
+      (Date.now() - new Date(lastSync).getTime() < 5 * 60 * 1000); // 5 minutes
+
+    if (!forceRefresh && hasRecentData) {
+      return { success: true, data: profile };
+    }
+
+    loadingRef.current = true;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Sync all data from server
+      const result = await syncWithServer();
+
+      if (result) {
+        setError(null);
+        return { success: true, data: result };
+      } else {
+        throw new Error('Failed to sync profile data');
+      }
+    } catch (err) {
+      console.error('Full profile loading error:', err);
+      const errorMessage = err.message || 'Failed to load profile data';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setIsLoading(false);
+      loadingRef.current = false;
+    }
+  }, [isAuthenticated, profile, favorites, lastSync, syncWithServer]);
+
+  // Update profile
+  const updateProfile = useCallback(async (profileData) => {
+    if (!isAuthenticated) {
+      const error = 'Please sign in to update your profile';
+      toast.error(error);
+      return { success: false, error };
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await updateProfileStore(profileData);
+
+      if (result.success) {
+        toast.success('Profile updated successfully!');
+        setError(null);
+        return { success: true, data: result.data };
+      } else {
+        throw new Error(result.error || 'Failed to update profile');
+      }
+    } catch (err) {
+      console.error('Profile update error:', err);
+      const errorMessage = err.message || 'Failed to update profile';
+      setError(errorMessage);
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [isAuthenticated, updateProfileStore]);
 
-  // Avatar upload with validation and toast notifications
-  const handleAvatarUpload = async (file) => {
-    // Validate file
+  // Upload avatar
+  const uploadAvatar = useCallback(async (file) => {
+    if (!isAuthenticated) {
+      const error = 'Please sign in to upload an avatar';
+      toast.error(error);
+      return { success: false, error };
+    }
+
     if (!file) {
-      toast.error("Please select a file");
-      return { success: false, error: "No file selected" };
+      const error = 'Please select a file to upload';
+      toast.error(error);
+      return { success: false, error };
     }
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file");
-      return { success: false, error: "Invalid file type" };
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      // 5MB limit
-      toast.error("File size must be less than 5MB");
-      return { success: false, error: "File too large" };
-    }
+    setIsLoading(true);
+    setError(null);
 
     try {
       const formData = new FormData();
-      formData.append("avatar", file);
+      formData.append('avatar', file);
 
-      const result = await uploadAvatar(formData);
+      const result = await uploadAvatarStore(formData);
+
       if (result.success) {
-        toast.success("Avatar uploaded successfully!");
-        return result;
+        toast.success('Avatar uploaded successfully!');
+        setError(null);
+        return { success: true, data: result.data };
       } else {
-        toast.error(result.error || "Failed to upload avatar");
-        return result;
+        throw new Error(result.error || 'Failed to upload avatar');
       }
-    } catch (error) {
-      const errorMessage = error.message || "Failed to upload avatar";
+    } catch (err) {
+      console.error('Avatar upload error:', err);
+      const errorMessage = err.message || 'Failed to upload avatar';
+      setError(errorMessage);
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [isAuthenticated, uploadAvatarStore]);
 
-  // Avatar delete with confirmation and toast notifications
-  const handleAvatarDelete = async () => {
+  // Delete avatar
+  const deleteAvatar = useCallback(async () => {
+    if (!isAuthenticated) {
+      const error = 'Please sign in to delete your avatar';
+      toast.error(error);
+      return { success: false, error };
+    }
+
+    setIsLoading(true);
+    setError(null);
+
     try {
-      const result = await deleteAvatar();
+      const result = await deleteAvatarStore();
+
       if (result.success) {
-        toast.success("Avatar deleted successfully!");
-        return result;
+        toast.success('Avatar deleted successfully!');
+        setError(null);
+        return { success: true };
       } else {
-        toast.error(result.error || "Failed to delete avatar");
-        return result;
+        throw new Error(result.error || 'Failed to delete avatar');
       }
-    } catch (error) {
-      const errorMessage = error.message || "Failed to delete avatar";
+    } catch (err) {
+      console.error('Avatar delete error:', err);
+      const errorMessage = err.message || 'Failed to delete avatar';
+      setError(errorMessage);
       toast.error(errorMessage);
       return { success: false, error: errorMessage };
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [isAuthenticated, deleteAvatarStore]);
 
-  // Get current user data - FIXED: Prioritize full profile for avatar
-  const getCurrentUser = () => {
-    // If we have a full profile, use it (it has avatar and complete data)
-    if (profile) {
-      return profile;
+  // Force refresh all data
+  const refreshProfile = useCallback(async () => {
+    return await ensureFullProfileLoaded(true);
+  }, [ensureFullProfileLoaded]);
+
+  // Initialize on mount and auth changes
+  useEffect(() => {
+    if (isAuthenticated && !isInitialized) {
+      ensureInitialized();
+    } else if (!isAuthenticated) {
+      setIsInitialized(false);
+      setError(null);
+      initializationRef.current = false;
+      loadingRef.current = false;
     }
-    // Only fallback to minimal profile if full profile is not available
-    return minimalProfile;
-  };
+  }, [isAuthenticated, isInitialized, ensureInitialized]);
 
-  // ADDED: Load full profile if we only have minimal profile
-  const ensureFullProfile = async () => {
-    if (!profile && minimalProfile) {
-      try {
-        await loadProfile(false);
-      } catch (error) {
-        console.error('Failed to load full profile:', error);
+  // Auto-refresh stale data
+  useEffect(() => {
+    if (!isAuthenticated || !isInitialized) return;
+
+    const checkAndRefreshData = async () => {
+      const isStale = !lastSync || (Date.now() - new Date(lastSync).getTime() > 10 * 60 * 1000); // 10 minutes
+
+      if (isStale && !loadingRef.current) {
+        console.log('Data is stale, refreshing...');
+        await ensureFullProfileLoaded(false);
       }
-    }
-  };
+    };
 
-  // Check if user has avatar - FIXED: Use full profile data
-  const hasAvatar = () => {
-    const user = getCurrentUser();
-    return !!user?.avatar;
-  };
+    checkAndRefreshData();
 
-  // Get user stats
-  const getUserStats = () => {
-    const user = getCurrentUser();
-    return (
-      user?.stats || {
-        totalFavorites: 0,
-        totalWatched: 0,
-        averageRating: 0,
-      }
-    );
-  };
+    // Set up periodic refresh
+    const interval = setInterval(checkAndRefreshData, 5 * 60 * 1000); // Every 5 minutes
 
-  // Get user preferences
-  const getUserPreferences = () => {
-    const user = getCurrentUser();
-    return (
-      user?.preferences || {
-        theme: "dark",
-        genres: [],
-      }
-    );
-  };
-
-  // Refresh profile data
-  const refreshProfile = async (forceRefresh = false) => {
-    try {
-      const result = await loadProfile(forceRefresh);
-      return result;
-    } catch (error) {
-      const errorMessage = error.message || "Failed to refresh profile";
-      toast.error(errorMessage);
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  // Refresh minimal profile data
-  const refreshMinimalProfile = async (forceRefresh = false) => {
-    try {
-      const result = await loadMinimalProfile(forceRefresh);
-      return result;
-    } catch (error) {
-      const errorMessage = error.message || "Failed to refresh profile";
-      toast.error(errorMessage);
-      return { success: false, error: errorMessage };
-    }
-  };
+    return () => clearInterval(interval);
+  }, [isAuthenticated, isInitialized, lastSync, ensureFullProfileLoaded]);
 
   return {
-    // Data
+    // User data
+    currentUser,
     profile,
     minimalProfile,
-    currentUser: getCurrentUser(),
-    userStats: getUserStats(),
-    userPreferences: getUserPreferences(),
+    favorites: favorites || [],
+    watchedMovies: watchedMovies || [],
+    reviews: reviews || [],
+    watchlists: watchlists || [],
+    userStats,
 
-    // State
-    isProfileUpdateLoading,
-    isAvatarLoading,
-    isLoading,
-    hasAvatar: hasAvatar(),
-
-    // Errors
-    profileUpdateError,
-    avatarError,
+    // Loading states
+    isLoading: isLoading || isMinimalProfileLoading,
+    isInitialized,
     error,
 
     // Actions
-    updateProfile: handleUpdateProfile,
-    uploadAvatar: handleAvatarUpload,
-    deleteAvatar: handleAvatarDelete,
+    updateProfile,
+    uploadAvatar,
+    deleteAvatar,
     refreshProfile,
-    refreshMinimalProfile,
-    ensureFullProfileLoaded: ensureFullProfile, // NEW: Helper to ensure full profile is loaded
+    ensureFullProfileLoaded,
 
     // Utilities
-    getCurrentUser,
-    getUserStats,
-    getUserPreferences,
+    hasData: !!(currentUser && isInitialized),
+    isReady: !!(isInitialized && !isLoading && currentUser),
+    lastSync
   };
 };

@@ -11,7 +11,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
-import { useUserStore } from "../stores/userStore";
+import { useProfile } from "../hooks/useProfile"; // Using the fixed hook
 import { useWatchlistStore } from "../stores/watchlistStore";
 import MovieCard from "../components/MovieCard";
 import Button from "../components/ui/Button";
@@ -56,45 +56,42 @@ const UserPage = () => {
 
   const { user, isAuthenticated } = useAuthStore();
 
-  const userStore = useUserStore();
+  // Use the fixed profile hook
+  const {
+    currentUser,
+    favorites,
+    watchedMovies,
+    reviews,
+    userStats,
+    isLoading: profileLoading,
+    isInitialized,
+    error: userError,
+    updateProfile: handleUpdateProfile,
+    uploadAvatar: handleAvatarUpload,
+    deleteAvatar: handleAvatarDelete,
+    ensureFullProfileLoaded,
+    hasData,
+    isReady
+  } = useProfile();
 
   const {
     isLoading: isLoadingWatchlists,
     error: watchlistError,
     loadWatchlists,
     deleteWatchlist,
+    watchlists = [],
   } = useWatchlistStore();
 
-  const {
-    watchlists = [],
-    getStats = [],
-    favorites = [],
-    watchedMovies = [],
-    reviews = [],
-    profile = null,
-    removeFromFavorites,
-    removeFromWatched,
-    addToWatched,
-    isLoading = false,
-    error: userError = null,
-    loadProfile,
-  } = userStore || {};
-
+  // Load data when component mounts and user is authenticated
   useEffect(() => {
-    if (isAuthenticated && userStore?.initialize) {
-      userStore.initialize();
-    }
-  }, [isAuthenticated, userStore]);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      if (loadProfile) {
-        loadProfile();
-      }
+    if (isAuthenticated && isInitialized) {
+      // Ensure we have full profile data including favorites
+      ensureFullProfileLoaded();
       loadWatchlists();
     }
-  }, [isAuthenticated, loadProfile, loadWatchlists]);
+  }, [isAuthenticated, isInitialized, ensureFullProfileLoaded, loadWatchlists]);
 
+  // Redirect if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
       toast.error("Please log in to access this page");
@@ -102,31 +99,40 @@ const UserPage = () => {
     }
   }, [isAuthenticated, navigate]);
 
+  // Update active tab based on URL
   useEffect(() => {
     const currentSection = getCurrentSection();
     setActiveTab(currentSection);
   }, [location.pathname]);
 
+  // Update edit form when user data changes
   useEffect(() => {
-    const userData = profile || user;
-    if (userData) {
+    if (currentUser) {
       setEditForm({
-        username: userData.username || "",
-        email: userData.email || "",
-        bio: userData.bio || "",
-        firstName: userData.firstName || "",
-        lastName: userData.lastName || "",
+        username: currentUser.username || "",
+        email: currentUser.email || "",
+        bio: currentUser.bio || "",
+        firstName: currentUser.firstName || "",
+        lastName: currentUser.lastName || "",
       });
     }
-  }, [user, profile]);
+  }, [currentUser]);
+
+  // Debug log to check favorites data
+  useEffect(() => {
+    console.log('UserPage - Profile data:', {
+      currentUser: !!currentUser,
+      favorites: favorites?.length || 0,
+      watchedMovies: watchedMovies?.length || 0,
+      isReady,
+      hasData,
+      isInitialized,
+      profileLoading
+    });
+  }, [currentUser, favorites, watchedMovies, isReady, hasData, isInitialized, profileLoading]);
 
   const handleThemeChange = async (theme) => {
     try {
-      // Update theme in user preferences
-      if (userStore?.updateTheme) {
-        await userStore.updateTheme(theme);
-      }
-
       // Apply theme to document
       const root = document.documentElement;
       if (theme === "light") {
@@ -147,32 +153,6 @@ const UserPage = () => {
     }
   };
 
-  // Add avatar upload handler (if not already present):
-  const handleAvatarUpload = async (formData) => {
-    try {
-      if (userStore?.uploadAvatar) {
-        await userStore.uploadAvatar(formData);
-        toast.success("Avatar uploaded successfully");
-      }
-    } catch (error) {
-      console.error("Avatar upload error:", error);
-      toast.error("Failed to upload avatar");
-    }
-  };
-
-  // Add avatar delete handler (if not already present):
-  const handleAvatarDelete = async () => {
-    try {
-      if (userStore?.deleteAvatar) {
-        await userStore.deleteAvatar();
-        toast.success("Avatar deleted successfully");
-      }
-    } catch (error) {
-      console.error("Avatar delete error:", error);
-      toast.error("Failed to delete avatar");
-    }
-  };
-
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     navigate(`/user/${tab}`);
@@ -181,44 +161,6 @@ const UserPage = () => {
   const handleMovieClick = (movie) => {
     const movieId = movie.movieId || movie.id;
     navigate(`/movie/${movieId}`);
-  };
-
-  const handleRemoveFromList = async (movie, listType) => {
-    try {
-      const movieId = movie.movieId || movie.id;
-      const movieTitle = movie.title;
-
-      if (listType === "favorites" && removeFromFavorites) {
-        await removeFromFavorites(movieId);
-        toast.success(`Removed "${movieTitle}" from favorites`);
-      } else if (listType === "watched" && removeFromWatched) {
-        await removeFromWatched(movieId);
-        toast.success(`Removed "${movieTitle}" from watched list`);
-      }
-    } catch {
-      toast.error("Failed to remove movie");
-    }
-  };
-
-  const handleMarkAsWatched = async (movie) => {
-    try {
-      const movieData = {
-        id: movie.movieId || movie.id,
-        title: movie.title,
-        poster_path: movie.poster,
-        release_date: movie.releaseDate,
-        rating: movie.rating,
-        overview: movie.overview,
-        ...movie,
-      };
-
-      if (addToWatched) {
-        await addToWatched(movieData);
-        toast.success(`"${movie.title}" marked as watched`);
-      }
-    } catch {
-      toast.error("Failed to mark as watched");
-    }
   };
 
   const handleCreateWatchlist = () => {
@@ -248,12 +190,13 @@ const UserPage = () => {
         return;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const result = await handleUpdateProfile(editForm);
 
-      setIsEditing(false);
-      toast.success("Profile updated successfully!");
-    } catch {
-      toast.error("Failed to update profile");
+      if (result.success) {
+        setIsEditing(false);
+      }
+    } catch (error) {
+      console.error("Profile update error:", error);
     } finally {
       setLoading(false);
     }
@@ -261,14 +204,15 @@ const UserPage = () => {
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    const userData = profile || user;
-    setEditForm({
-      username: userData?.username || "",
-      email: userData?.email || "",
-      bio: userData?.bio || "",
-      firstName: userData?.firstName || "",
-      lastName: userData?.lastName || "",
-    });
+    if (currentUser) {
+      setEditForm({
+        username: currentUser.username || "",
+        email: currentUser.email || "",
+        bio: currentUser.bio || "",
+        firstName: currentUser.firstName || "",
+        lastName: currentUser.lastName || "",
+      });
+    }
   };
 
   const handleWatchlistModalSuccess = () => {
@@ -428,11 +372,9 @@ const UserPage = () => {
             key={movie.id || movie.movieId}
             movie={movie}
             onClick={() => handleMovieClick(movie)}
-            onRemove={() => handleRemoveFromList(movie, activeTab)}
             showRemove
             showWatchlistButton
             showMarkAsWatched={activeTab === "watchlist"}
-            onMarkAsWatched={() => handleMarkAsWatched(movie)}
           />
         ))}
       </div>
@@ -444,18 +386,10 @@ const UserPage = () => {
 
     if (isLoadingWatchlists) {
       return (
-        <EmptyState
-          icon={BookOpen}
-          title={searchTerm ? "No watchlists found" : "No watchlists yet"}
-          description={
-            searchTerm
-              ? "Try adjusting your search term."
-              : "Create your first watchlist to organize movies you want to watch."
-          }
-          buttonText={!searchTerm ? "Create Your First Watchlist" : null}
-          buttonAction={!searchTerm ? handleCreateWatchlist : null}
-          showButton={!searchTerm}
-        />
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+          <p className="mt-2 text-gray-400">Loading watchlists...</p>
+        </div>
       );
     }
 
@@ -582,42 +516,30 @@ const UserPage = () => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <div className="text-gray-400 mb-4">
-              <BookOpen className="h-16 w-16 mx-auto mb-4 opacity-50" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">
-              {searchTerm ? "No watchlists found" : "No watchlists yet"}
-            </h3>
-            <p className="text-gray-400 mb-6">
-              {searchTerm
+          <EmptyState
+            icon={BookOpen}
+            title={searchTerm ? "No watchlists found" : "No watchlists yet"}
+            description={
+              searchTerm
                 ? "Try adjusting your search term."
-                : "Create your first watchlist to organize movies you want to watch."}
-            </p>
-            {!searchTerm && (
-              <Button
-                variant="primary"
-                size="medium"
-                leftIcon={<FolderPlus className="h-4 w-4" />}
-                onClick={handleCreateWatchlist}
-              >
-                Create Your First Watchlist
-              </Button>
-            )}
-          </div>
+                : "Create your first watchlist to organize movies you want to watch."
+            }
+            buttonText={!searchTerm ? "Create Your First Watchlist" : null}
+            buttonAction={!searchTerm ? handleCreateWatchlist : null}
+            showButton={!searchTerm}
+          />
         )}
       </div>
     );
   };
 
   const renderProfileSection = () => {
-    const userData = profile || user;
-    if (!userData) return null;
+    if (!currentUser) return null;
 
     return (
       <div className="max-w-4xl mx-auto">
         <ProfileEditForm
-          userData={userData}
+          userData={currentUser}
           editForm={editForm}
           setEditForm={setEditForm}
           isEditing={isEditing}
@@ -634,8 +556,8 @@ const UserPage = () => {
           watchlists={watchlists}
           watchedMovies={watchedMovies}
           reviews={reviews}
-          stats={getStats()} // This should contain the backend stats
-        />{" "}
+          stats={userStats || {}}
+        />
         <RecentActivity />
         {watchlists.filter(Boolean).map((watchlist) => (
           <WatchlistCard
@@ -649,8 +571,21 @@ const UserPage = () => {
     );
   };
 
+  // Show loading state while initializing
   if (!isAuthenticated) {
     return null;
+  }
+
+  // Show loading state while profile is being initialized
+  if (!isInitialized || profileLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading your profile...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -659,16 +594,9 @@ const UserPage = () => {
         <UserPageHeader
           activeTab={activeTab}
           user={user}
-          profile={profile}
+          profile={currentUser}
           onBackClick={() => navigate("/")}
         />
-
-        {isLoading && (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
-            <p className="mt-2 text-gray-400">Loading...</p>
-          </div>
-        )}
 
         {userError && (
           <div className="bg-red-900 border border-red-700 text-red-100 px-4 py-3 rounded mb-6">

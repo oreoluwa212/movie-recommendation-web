@@ -1,6 +1,7 @@
-// App.js - Updated version with all user routes
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+// App.js
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { ToastContainer } from 'react-toastify';
+import { useEffect, useState } from 'react';
 import 'react-toastify/dist/ReactToastify.css';
 import Footer from "./components/layout/Footer";
 import Home from "./pages/Home";
@@ -13,16 +14,49 @@ import VerifyEmail from "./pages/auth/VerifyEmail";
 import UserPage from "./pages/UserPage";
 import Navbar from "./components/layout/NavBar";
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
+
 function App() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Global modal state handler - can be used by navbar
+  const handleModalState = (isOpen) => {
+    setIsModalOpen(isOpen);
+    // Prevent body scroll when modal is open
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   return (
     <Router>
-      <div className="min-h-screen bg-gray-900 text-white">
+      <div className="min-h-screen bg-gray-900 text-white relative">
+        <ScrollToTop />
 
-        {/* Navigation */}
-        <Navbar />
-        
+        {/* Navigation - Always stays on top */}
+        <div className={`relative ${isModalOpen ? 'z-50' : 'z-40'}`}>
+          <Navbar onModalStateChange={handleModalState} />
+        </div>
+
         {/* Main Content */}
-        <main className="min-h-screen">
+        <main className="min-h-screen relative z-10">
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Home />} />
@@ -39,7 +73,7 @@ function App() {
             <Route path="/watchlist" element={<UserPage />} />
             <Route path="/watched" element={<UserPage />} />
             <Route path="/profile" element={<UserPage />} />
-            
+
             {/* Alternative user routes with section parameter */}
             <Route path="/user/:section" element={<UserPage />} />
 
@@ -58,8 +92,8 @@ function App() {
 
         {/* Footer */}
         <Footer />
-        
-        {/* Toast Container */}
+
+        {/* Toast Container - High z-index to stay above modal */}
         <ToastContainer
           position="top-right"
           autoClose={3000}
@@ -73,6 +107,7 @@ function App() {
           theme="dark"
           toastClassName="bg-gray-800 text-white"
           progressClassName="bg-red-600"
+          style={{ zIndex: 9999 }}
         />
       </div>
     </Router>
